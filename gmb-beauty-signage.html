@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>GMB Beauty – Digital Signage</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Lato:wght@300;400;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0b1a12;
+      --panel-bg: #0f2418;
+      --card-bg:  rgba(255,255,255,0.04);
+      --border:   rgba(201,168,76,0.25);
+      --gold:     #c9a84c;
+      --gold-lt:  #e2c97a;
+      --green:    #1e5c38;
+      --green-lt: #2a7a4d;
+      --white:    #f5f0e8;
+      --muted:    rgba(245,240,232,0.55);
+      --danger:   #e05c5c;
+    }
+
+    html, body {
+      width: 100%; height: 100%;
+      background: var(--bg);
+      color: var(--white);
+      font-family: 'Lato', sans-serif;
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── TOP BAR ── */
+    #topbar {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      height: 64px;
+      background: linear-gradient(90deg, #081410 0%, #0f2418 60%, #081410 100%);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 28px;
+    }
+    #topbar .logo {
+      display: flex; align-items: center; gap: 12px;
+    }
+    #topbar .logo-mark {
+      width: 40px; height: 40px;
+      background: linear-gradient(135deg, var(--green), var(--green-lt));
+      border: 1px solid var(--gold);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Playfair Display', serif;
+      font-size: 16px; font-weight: 700;
+      color: var(--gold);
+    }
+    #topbar .brand {
+      font-family: 'Playfair Display', serif;
+      font-size: 22px; font-weight: 700;
+      letter-spacing: 1px;
+      color: var(--white);
+    }
+    #topbar .brand span { color: var(--gold); }
+    #topbar .clock-block {
+      text-align: right;
+    }
+    #topbar #clock {
+      font-size: 22px; font-weight: 700; letter-spacing: 1px; color: var(--gold);
+    }
+    #topbar #dateline {
+      font-size: 11px; font-weight: 300; color: var(--muted); letter-spacing: 0.5px;
+    }
+
+    /* ── NAV TABS ── */
+    #navtabs {
+      position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
+      height: 56px;
+      background: linear-gradient(90deg, #081410 0%, #0f2418 60%, #081410 100%);
+      border-top: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+    }
+    .nav-btn {
+      padding: 8px 18px; border-radius: 24px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      font-family: 'Lato', sans-serif;
+      font-size: 12px; font-weight: 700; letter-spacing: 0.8px;
+      text-transform: uppercase;
+      cursor: pointer; transition: all 0.3s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .nav-btn.active {
+      background: var(--green);
+      border-color: var(--gold);
+      color: var(--gold-lt);
+    }
+    .nav-btn:hover { border-color: var(--gold); color: var(--white); }
+
+    /* ── PANELS ── */
+    #panels {
+      position: fixed; top: 64px; bottom: 56px; left: 0; right: 0;
+      overflow: hidden;
+    }
+    .panel {
+      position: absolute; inset: 0;
+      padding: 24px 28px;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.6s ease;
+      overflow-y: auto;
+    }
+    .panel.active { opacity: 1; pointer-events: all; }
+
+    /* Scrollbar */
+    .panel::-webkit-scrollbar { width: 4px; }
+    .panel::-webkit-scrollbar-track { background: transparent; }
+    .panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    /* ── PANEL HEADER ── */
+    .panel-header {
+      display: flex; align-items: center; gap: 14px;
+      margin-bottom: 22px;
+    }
+    .panel-icon {
+      width: 44px; height: 44px; flex-shrink: 0;
+      background: var(--green);
+      border: 1px solid var(--gold);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+    }
+    .panel-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 26px; font-weight: 700;
+      color: var(--white);
+    }
+    .panel-title span { color: var(--gold); }
+    .panel-subtitle {
+      font-size: 12px; font-weight: 300; color: var(--muted); letter-spacing: 0.5px;
+    }
+    .gold-line {
+      width: 48px; height: 2px;
+      background: linear-gradient(90deg, var(--gold), transparent);
+      margin-top: 4px;
+    }
+
+    /* ═══════════════════════════════
+       PANEL 1 – WAITING LIST
+    ═══════════════════════════════ */
+    #panel-wait .check-in-btn {
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      width: 100%; padding: 16px;
+      background: linear-gradient(135deg, var(--green), var(--green-lt));
+      border: 1px solid var(--gold);
+      border-radius: 14px;
+      color: var(--gold-lt);
+      font-family: 'Playfair Display', serif;
+      font-size: 18px; font-weight: 700;
+      cursor: pointer; transition: all 0.2s;
+      margin-bottom: 22px;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #panel-wait .check-in-btn:active { transform: scale(0.98); opacity: 0.9; }
+
+    #wait-list { display: flex; flex-direction: column; gap: 10px; }
+
+    .wait-card {
+      display: flex; align-items: center; gap: 16px;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 18px;
+      animation: slideIn 0.4s ease;
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .wait-num {
+      width: 36px; height: 36px; flex-shrink: 0;
+      background: var(--green);
+      border: 1px solid var(--gold);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Playfair Display', serif;
+      font-size: 16px; font-weight: 700; color: var(--gold);
+    }
+    .wait-info { flex: 1; }
+    .wait-name { font-size: 17px; font-weight: 700; color: var(--white); }
+    .wait-service { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .wait-time { font-size: 12px; color: var(--gold); font-weight: 700; }
+    .wait-remove {
+      width: 32px; height: 32px;
+      background: rgba(224,92,92,0.15);
+      border: 1px solid rgba(224,92,92,0.3);
+      border-radius: 8px;
+      color: var(--danger);
+      font-size: 16px;
+      cursor: pointer; transition: all 0.2s;
+      display: flex; align-items: center; justify-content: center;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .wait-remove:hover { background: rgba(224,92,92,0.3); }
+
+    #wait-empty {
+      text-align: center; padding: 40px 20px;
+      color: var(--muted); font-size: 14px;
+      border: 1px dashed var(--border);
+      border-radius: 12px;
+    }
+    #wait-empty .big { font-size: 40px; margin-bottom: 10px; }
+
+    /* Modal */
+    #modal-overlay {
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(0,0,0,0.75);
+      display: none; align-items: center; justify-content: center;
+      backdrop-filter: blur(4px);
+    }
+    #modal-overlay.open { display: flex; }
+    #modal-box {
+      background: var(--panel-bg);
+      border: 1px solid var(--gold);
+      border-radius: 20px;
+      padding: 32px 28px;
+      width: min(420px, 90vw);
+    }
+    #modal-box h2 {
+      font-family: 'Playfair Display', serif;
+      font-size: 22px; color: var(--gold);
+      margin-bottom: 22px; text-align: center;
+    }
+    .modal-field { margin-bottom: 16px; }
+    .modal-field label {
+      display: block; font-size: 11px; font-weight: 700;
+      letter-spacing: 0.8px; text-transform: uppercase;
+      color: var(--muted); margin-bottom: 6px;
+    }
+    .modal-field input, .modal-field select {
+      width: 100%; padding: 12px 14px;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--white);
+      font-size: 16px;
+      outline: none; transition: border-color 0.2s;
+      -webkit-appearance: none;
+    }
+    .modal-field input:focus, .modal-field select:focus {
+      border-color: var(--gold);
+    }
+    .modal-field select option { background: #0f2418; color: var(--white); }
+    .modal-btns { display: flex; gap: 12px; margin-top: 22px; }
+    .modal-btns button {
+      flex: 1; padding: 14px;
+      border-radius: 10px; border: none;
+      font-size: 15px; font-weight: 700;
+      cursor: pointer; transition: all 0.2s;
+    }
+    #modal-cancel {
+      background: var(--card-bg); border: 1px solid var(--border); color: var(--muted);
+    }
+    #modal-confirm {
+      background: linear-gradient(135deg, var(--green), var(--green-lt));
+      border: 1px solid var(--gold); color: var(--gold-lt);
+    }
+
+    /* ═══════════════════════════════
+       PANEL 2 – SERVICES
+    ═══════════════════════════════ */
+    #panel-services .service-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 14px;
+    }
+    .service-category {
+      grid-column: 1 / -1;
+      font-family: 'Playfair Display', serif;
+      font-size: 14px; font-style: italic;
+      color: var(--gold); letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 6px; margin-top: 10px;
+    }
+    .service-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 18px;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 10px;
+      transition: border-color 0.2s;
+    }
+    .service-card:hover { border-color: rgba(201,168,76,0.5); }
+    .service-name { font-size: 15px; font-weight: 700; color: var(--white); }
+    .service-desc { font-size: 11px; color: var(--muted); margin-top: 3px; }
+    .service-price {
+      font-family: 'Playfair Display', serif;
+      font-size: 20px; font-weight: 700; color: var(--gold);
+      white-space: nowrap;
+    }
+    .service-price.from::before {
+      content: 'from '; font-size: 10px; font-family: 'Lato', sans-serif;
+      font-weight: 300; color: var(--muted);
+    }
+
+    /* ═══════════════════════════════
+       PANEL 3 – GALLERY
+    ═══════════════════════════════ */
+    #panel-gallery .gallery-intro {
+      font-size: 14px; color: var(--muted); margin-bottom: 18px; font-style: italic;
+    }
+    .photo-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+    .photo-item {
+      aspect-ratio: 3/4;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      position: relative;
+      background: var(--card-bg);
+      cursor: pointer;
+      transition: transform 0.2s, border-color 0.2s;
+    }
+    .photo-item:hover { transform: scale(1.02); border-color: var(--gold); }
+    .photo-item img {
+      width: 100%; height: 100%; object-fit: cover;
+      display: block;
+    }
+    .photo-placeholder {
+      width: 100%; height: 100%;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 8px;
+    }
+    .photo-placeholder .ph-icon { font-size: 32px; opacity: 0.4; }
+    .photo-placeholder .ph-text {
+      font-size: 10px; color: var(--muted); text-align: center;
+      line-height: 1.4; padding: 0 8px;
+    }
+    /* Gradient placeholder backgrounds */
+    .photo-item:nth-child(3n+1) .photo-placeholder { background: linear-gradient(160deg,#0f2418,#1a3a28); }
+    .photo-item:nth-child(3n+2) .photo-placeholder { background: linear-gradient(160deg,#1a2f1a,#0f2418); }
+    .photo-item:nth-child(3n+3) .photo-placeholder { background: linear-gradient(160deg,#0f1a14,#1e3a20); }
+
+    .photo-label {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      padding: 20px 10px 10px;
+      background: linear-gradient(transparent, rgba(0,0,0,0.7));
+      font-size: 11px; font-weight: 700; color: var(--gold-lt);
+      text-align: center;
+    }
+
+    /* ═══════════════════════════════
+       PANEL 4 – SPECIALS
+    ═══════════════════════════════ */
+    #panel-specials .specials-top {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 20px;
+    }
+    .special-hero {
+      grid-column: 1 / -1;
+      background: linear-gradient(135deg, #0f2418 0%, #1e5c38 50%, #0f2418 100%);
+      border: 1px solid var(--gold);
+      border-radius: 16px;
+      padding: 24px 22px;
+      position: relative; overflow: hidden;
+    }
+    .special-hero::before {
+      content: '✦';
+      position: absolute; right: 20px; top: 10px;
+      font-size: 60px; opacity: 0.06; color: var(--gold);
+    }
+    .special-hero .tag {
+      display: inline-block;
+      background: var(--gold);
+      color: #0b1a12;
+      font-size: 10px; font-weight: 700; letter-spacing: 1px;
+      text-transform: uppercase; padding: 3px 10px; border-radius: 20px;
+      margin-bottom: 10px;
+    }
+    .special-hero h3 {
+      font-family: 'Playfair Display', serif;
+      font-size: 22px; color: var(--white); margin-bottom: 6px;
+    }
+    .special-hero p { font-size: 13px; color: var(--muted); line-height: 1.6; }
+    .special-hero .price-row {
+      margin-top: 14px; display: flex; align-items: baseline; gap: 10px;
+    }
+    .special-hero .old-price {
+      font-size: 14px; color: var(--muted); text-decoration: line-through;
+    }
+    .special-hero .new-price {
+      font-family: 'Playfair Display', serif;
+      font-size: 32px; font-weight: 700; color: var(--gold);
+    }
+    .special-hero .date-badge {
+      position: absolute; top: 16px; right: 16px;
+      background: rgba(201,168,76,0.15);
+      border: 1px solid var(--border);
+      border-radius: 8px; padding: 6px 12px; text-align: center;
+    }
+    .special-hero .date-badge .dt { font-size: 10px; color: var(--muted); }
+    .special-hero .date-badge .dd { font-size: 14px; font-weight: 700; color: var(--gold); }
+
+    .special-card {
+      background: var(--card-bg); border: 1px solid var(--border);
+      border-radius: 14px; padding: 18px 16px;
+      transition: border-color 0.2s;
+    }
+    .special-card:hover { border-color: rgba(201,168,76,0.5); }
+    .special-card .sc-tag {
+      font-size: 9px; font-weight: 700; letter-spacing: 1px;
+      text-transform: uppercase; color: var(--gold); margin-bottom: 8px;
+    }
+    .special-card h4 {
+      font-family: 'Playfair Display', serif;
+      font-size: 16px; color: var(--white); margin-bottom: 6px;
+    }
+    .special-card p { font-size: 12px; color: var(--muted); line-height: 1.5; }
+    .special-card .sc-price {
+      margin-top: 10px;
+      font-family: 'Playfair Display', serif;
+      font-size: 22px; font-weight: 700; color: var(--gold);
+    }
+    .special-card .sc-date {
+      font-size: 10px; color: var(--muted); margin-top: 4px;
+    }
+
+    /* Google Calendar embed section */
+    .cal-section {
+      margin-top: 20px;
+    }
+    .cal-section h3 {
+      font-family: 'Playfair Display', serif;
+      font-size: 16px; color: var(--gold); margin-bottom: 12px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .cal-frame-wrap {
+      border-radius: 12px; overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .cal-frame-wrap iframe {
+      width: 100%; height: 300px; border: none;
+      filter: invert(0.9) hue-rotate(150deg) saturate(0.7);
+      display: block;
+    }
+    .cal-setup-note {
+      background: rgba(201,168,76,0.07);
+      border: 1px dashed rgba(201,168,76,0.3);
+      border-radius: 10px; padding: 14px 16px;
+      font-size: 12px; color: var(--muted); line-height: 1.6;
+    }
+    .cal-setup-note strong { color: var(--gold-lt); }
+
+    /* Auto-rotate progress bar */
+    #progress-bar {
+      position: fixed; bottom: 56px; left: 0; height: 2px;
+      background: linear-gradient(90deg, var(--gold), var(--green-lt));
+      width: 0%; transition: width linear;
+      z-index: 100;
+    }
+
+    /* Decorative corner */
+    .corner-deco {
+      position: fixed; bottom: 60px; right: 14px;
+      font-size: 10px; color: rgba(201,168,76,0.25);
+      letter-spacing: 1px; font-weight: 300;
+    }
+  </style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <div class="logo">
+    <div class="logo-mark">G</div>
+    <div>
+      <div class="brand">GMB <span>Beauty</span></div>
+    </div>
+  </div>
+  <div class="clock-block">
+    <div id="clock">–:– –M</div>
+    <div id="dateline">–</div>
+  </div>
+</div>
+
+<!-- PANELS -->
+<div id="panels">
+
+  <!-- ── PANEL 1: WAITING LIST ── -->
+  <div class="panel active" id="panel-wait">
+    <div class="panel-header">
+      <div class="panel-icon">💅</div>
+      <div>
+        <div class="panel-title">Walk-In <span>Queue</span></div>
+        <div class="panel-subtitle">Tap below to add yourself to the waiting list</div>
+        <div class="gold-line"></div>
+      </div>
+    </div>
+
+    <button class="check-in-btn" onclick="openModal()">
+      ✦ &nbsp; Check In — Add Me to the List
+    </button>
+
+    <div id="wait-list">
+      <div id="wait-empty">
+        <div class="big">🌿</div>
+        <div>No one in the queue right now.</div>
+        <div style="margin-top:6px;font-size:12px;">Be the first to check in!</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── PANEL 2: SERVICES & PRICES ── -->
+  <div class="panel" id="panel-services">
+    <div class="panel-header">
+      <div class="panel-icon">💎</div>
+      <div>
+        <div class="panel-title">Services <span>&amp; Prices</span></div>
+        <div class="panel-subtitle">All services performed by licensed professionals</div>
+        <div class="gold-line"></div>
+      </div>
+    </div>
+
+    <div class="service-grid">
+      <div class="service-category">✦ Hair Services</div>
+
+      <div class="service-card">
+        <div><div class="service-name">Wash &amp; Set</div><div class="service-desc">Shampoo, condition &amp; style</div></div>
+        <div class="service-price">$45</div>
+      </div>
+      <div class="service-card">
+        <div><div class="service-name">Silk Press</div><div class="service-desc">Smooth, sleek finish</div></div>
+        <div class="service-price from">$75</div>
+      </div>
+      <div class="service-card">
+        <div><div class="service-name">Relaxer</div><div class="service-desc">Touch-up or new growth</div></div>
+        <div class="service-price from">$85</div>
+      </div>
+      <div class="service-card">
+        <div><div class="service-name">Color &amp; Highlights</div><div class="service-desc">Single process or partial</div></div>
+        <div class="service-price from">$95</div>
+      </div>
+      <div class="service-card">
+        <div><div class="service-name">Deep Condition</div><div class="service-desc">Moisture &amp; protein treatment</div></div>
+        <div class="service-price">$35</div>
+      </div>
+      <div class="service-card">
+        <div><div class="service-name">Trim &amp; Dusting</div><div class="service-desc">Healthy ends, clean shape</div></div>
+        <div class="service-price from">$25</div>
+      </div>
+
+      <div class="service-category">✦ Braids &amp; Protective Styles</div>
+
+      <div class="service-card">
+        <div><div class="service-name">Box Braids</div><div class="service-desc">Small, medium or large</div></div>
+        <div class="service-price from">$150</div>
+      </div>
+      <div class="service-card">
+        <div><div class="service-name">Knotless Braids</div><div class="service-desc">No-tension installation</div></div>
+        <div class="service-price from">$175</div>
+      </div>
+      <div class="service-card">
+        <div><div class="service-name">Senegalese Twists</div><div class="service-desc">Rope-style protective look</div></div>
+        <div class="service-price from">$160</div>
+      </div>
+      <div class="service-card">
+        <div><div class="service-name">Cornrows</div><div class="service-desc">Natural or with extensions</div></div>
+        <div class="service-price from">$60</div>
+      </div>
+
+      <div class="service-category">✦ Natural Hair</div>
+
+      <div class="service-card">
+        <div><div class="service-name">TWA Shapeup</div><div class="service-desc">Tapered natural cut</div></div>
+        <div class="service-price from">$40</div>
+      </div>
+      <div class="service-card">
+        <div><div class="service-name">Loc Retwist</div><div class="service-desc">Palm roll or comb coil</div></div>
+        <div class="service-price from">$65</div>
+      </div>
+      <div class="service-card">
+        <div><div class="service-name">Loc Starter</div><div class="service-desc">New loc installation</div></div>
+        <div class="service-price from">$120</div>
+      </div>
+
+      <div class="service-category">✦ Add-Ons</div>
+
+      <div class="service-card">
+        <div><div class="service-name">Scalp Treatment</div><div class="service-desc">Nourishing oil massage</div></div>
+        <div class="service-price">$20</div>
+      </div>
+      <div class="service-card">
+        <div><div class="service-name">Blow Out</div><div class="service-desc">Added to any service</div></div>
+        <div class="service-price">$20</div>
+      </div>
+    </div>
+
+    <div style="text-align:center;margin-top:20px;font-size:11px;color:var(--muted);font-style:italic;">
+      ✦ &nbsp; Prices may vary with hair length &amp; density &nbsp; ✦ &nbsp; Ask stylist for a full quote
+    </div>
+  </div>
+
+  <!-- ── PANEL 3: GALLERY ── -->
+  <div class="panel" id="panel-gallery">
+    <div class="panel-header">
+      <div class="panel-icon">📸</div>
+      <div>
+        <div class="panel-title">Client <span>Gallery</span></div>
+        <div class="panel-subtitle">Our work speaks for itself — transformations by the GMB team</div>
+        <div class="gold-line"></div>
+      </div>
+    </div>
+
+    <div class="gallery-intro">
+      ✦ &nbsp; Add your salon photos to the <code style="background:var(--card-bg);padding:2px 6px;border-radius:4px;font-size:12px;">photos</code> folder and update the image paths below.
+    </div>
+
+    <div class="photo-grid" id="photo-grid">
+      <!-- Photos are rendered by JS below -->
+    </div>
+  </div>
+
+  <!-- ── PANEL 4: SPECIALS ── -->
+  <div class="panel" id="panel-specials">
+    <div class="panel-header">
+      <div class="panel-icon">🌟</div>
+      <div>
+        <div class="panel-title">Specials <span>&amp; Events</span></div>
+        <div class="panel-subtitle">Exclusive deals, seasonal promotions &amp; upcoming events</div>
+        <div class="gold-line"></div>
+      </div>
+    </div>
+
+    <div class="specials-top">
+      <!-- Hero promo -->
+      <div class="special-hero">
+        <div class="date-badge">
+          <div class="dt">ENDS</div>
+          <div class="dd" id="hero-end-date">Jun 30</div>
+        </div>
+        <div class="tag">Featured Promotion</div>
+        <h3>Summer Glow Package</h3>
+        <p>Wash &amp; set + deep condition + scalp treatment — everything your hair needs heading into summer.</p>
+        <div class="price-row">
+          <span class="old-price">$100</span>
+          <span class="new-price">$75</span>
+        </div>
+      </div>
+
+      <!-- Smaller cards -->
+      <div class="special-card">
+        <div class="sc-tag">✦ Referral Reward</div>
+        <h4>Bring a Friend</h4>
+        <p>Refer a new client and receive $15 off your next visit. No limit on referrals!</p>
+        <div class="sc-price">$15 off</div>
+        <div class="sc-date">Ongoing</div>
+      </div>
+
+      <div class="special-card">
+        <div class="sc-tag">✦ Weekly Deal</div>
+        <h4>Tuesday Wash Day</h4>
+        <p>Every Tuesday — Wash &amp; Set for only $35. Must book in advance.</p>
+        <div class="sc-price">$35</div>
+        <div class="sc-date">Every Tuesday</div>
+      </div>
+
+      <div class="special-card">
+        <div class="sc-tag">✦ Loyalty</div>
+        <h4>10th Visit Free</h4>
+        <p>Visit us 9 times and your 10th wash &amp; set is completely on us. Ask staff for your loyalty card.</p>
+        <div class="sc-price">FREE</div>
+        <div class="sc-date">Loyalty Program</div>
+      </div>
+
+      <div class="special-card">
+        <div class="sc-tag">✦ Bundle</div>
+        <h4>Braids + Deep Condition</h4>
+        <p>Get a deep conditioning treatment bundled with any braiding service for a reduced price.</p>
+        <div class="sc-price">Save $20</div>
+        <div class="sc-date">Available Now</div>
+      </div>
+    </div>
+
+    <!-- Google Calendar Section -->
+    <div class="cal-section">
+      <h3>📅 &nbsp; Upcoming Events &amp; Appointments</h3>
+
+      <div class="cal-setup-note" id="cal-note">
+        <strong>Connect Your Google Calendar:</strong><br/>
+        1. Open Google Calendar → Settings → your salon calendar<br/>
+        2. Scroll to <em>"Integrate calendar"</em> → copy the <strong>Embed code</strong> URL (it ends in <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:3px;">&amp;output=embed</code>)<br/>
+        3. Open this HTML file in a text editor, find <code style="background:rgba(255,255,255,0.07);padding:1px 5px;border-radius:3px;">PASTE_YOUR_GOOGLE_CALENDAR_EMBED_URL_HERE</code> and replace it with your URL.<br/>
+        <br/>
+        <strong>Once connected, your salon events and upcoming specials will appear here automatically.</strong>
+      </div>
+
+      <!-- Replace the src below with your Google Calendar embed URL -->
+      <div class="cal-frame-wrap" id="cal-frame-wrap" style="display:none;">
+        <iframe src="PASTE_YOUR_GOOGLE_CALENDAR_EMBED_URL_HERE" title="GMB Beauty Calendar"></iframe>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /panels -->
+
+<!-- BOTTOM NAV -->
+<div id="navtabs">
+  <button class="nav-btn active" onclick="goTo(0)">💅 Queue</button>
+  <button class="nav-btn" onclick="goTo(1)">💎 Services</button>
+  <button class="nav-btn" onclick="goTo(2)">📸 Gallery</button>
+  <button class="nav-btn" onclick="goTo(3)">🌟 Specials</button>
+</div>
+
+<!-- PROGRESS BAR -->
+<div id="progress-bar"></div>
+
+<!-- SIGN-IN MODAL -->
+<div id="modal-overlay" onclick="closeModalOutside(event)">
+  <div id="modal-box">
+    <h2>✦ Check In</h2>
+    <div class="modal-field">
+      <label>Your Name</label>
+      <input type="text" id="modal-name" placeholder="First &amp; Last Name" autocomplete="off" />
+    </div>
+    <div class="modal-field">
+      <label>Service Requested</label>
+      <select id="modal-service">
+        <option value="">– Select a service –</option>
+        <option>Wash &amp; Set</option>
+        <option>Silk Press</option>
+        <option>Relaxer</option>
+        <option>Color &amp; Highlights</option>
+        <option>Deep Condition</option>
+        <option>Box Braids</option>
+        <option>Knotless Braids</option>
+        <option>Senegalese Twists</option>
+        <option>Cornrows</option>
+        <option>Loc Retwist</option>
+        <option>Loc Starter</option>
+        <option>TWA Shapeup</option>
+        <option>Other</option>
+      </select>
+    </div>
+    <div class="modal-btns">
+      <button id="modal-cancel" onclick="closeModal()">Cancel</button>
+      <button id="modal-confirm" onclick="confirmCheckIn()">Join Queue ✦</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── DATA ──────────────────────────────────────────────────────
+const PANEL_COUNT  = 4;
+const ROTATE_MS    = 12000; // 12 seconds per panel
+let currentPanel   = 0;
+let rotateTimer    = null;
+let progressTimer  = null;
+
+// Gallery photos — replace src with real image paths or URLs
+const GALLERY_PHOTOS = [
+  { src: null, label: "Knotless Braids" },
+  { src: null, label: "Silk Press" },
+  { src: null, label: "Box Braids" },
+  { src: null, label: "Wash & Set" },
+  { src: null, label: "Loc Retwist" },
+  { src: null, label: "Deep Condition" },
+  { src: null, label: "Color" },
+  { src: null, label: "Cornrows" },
+  { src: null, label: "Natural Style" },
+];
+
+// ── CLOCK ─────────────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  const h   = now.getHours();
+  const m   = now.getMinutes().toString().padStart(2,'0');
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const h12  = ((h % 12) || 12);
+  document.getElementById('clock').textContent = `${h12}:${m} ${ampm}`;
+  const days  = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  document.getElementById('dateline').textContent =
+    `${days[now.getDay()]}, ${months[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`;
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ── PANEL NAVIGATION ─────────────────────────────────────────
+const panels  = document.querySelectorAll('.panel');
+const navBtns = document.querySelectorAll('.nav-btn');
+
+function goTo(idx) {
+  panels[currentPanel].classList.remove('active');
+  navBtns[currentPanel].classList.remove('active');
+  currentPanel = idx;
+  panels[currentPanel].classList.add('active');
+  navBtns[currentPanel].classList.add('active');
+  resetProgress();
+}
+
+// ── AUTO-ROTATE ───────────────────────────────────────────────
+function resetProgress() {
+  clearTimeout(rotateTimer);
+  cancelAnimationFrame(progressTimer);
+  const bar = document.getElementById('progress-bar');
+  bar.style.transition = 'none';
+  bar.style.width = '0%';
+  requestAnimationFrame(() => {
+    bar.style.transition = `width ${ROTATE_MS}ms linear`;
+    bar.style.width = '100%';
+  });
+  rotateTimer = setTimeout(() => {
+    goTo((currentPanel + 1) % PANEL_COUNT);
+  }, ROTATE_MS);
+}
+resetProgress();
+
+// ── WAITING LIST ──────────────────────────────────────────────
+let waitList = [];
+
+function renderWaitList() {
+  const cont = document.getElementById('wait-list');
+  const empty = document.getElementById('wait-empty');
+  cont.innerHTML = '';
+  if (waitList.length === 0) {
+    cont.appendChild(empty);
+    empty.style.display = '';
+    return;
+  }
+  waitList.forEach((entry, i) => {
+    const card = document.createElement('div');
+    card.className = 'wait-card';
+    card.innerHTML = `
+      <div class="wait-num">${i + 1}</div>
+      <div class="wait-info">
+        <div class="wait-name">${escHtml(entry.name)}</div>
+        <div class="wait-service">${escHtml(entry.service || 'Service TBD')}</div>
+      </div>
+      <div class="wait-time">Checked in ${entry.time}</div>
+      <button class="wait-remove" onclick="removeGuest(${i})" title="Remove">✕</button>
+    `;
+    cont.appendChild(card);
+  });
+}
+
+function removeGuest(idx) {
+  waitList.splice(idx, 1);
+  renderWaitList();
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── MODAL ─────────────────────────────────────────────────────
+function openModal() {
+  document.getElementById('modal-overlay').classList.add('open');
+  document.getElementById('modal-name').value = '';
+  document.getElementById('modal-service').value = '';
+  setTimeout(() => document.getElementById('modal-name').focus(), 100);
+}
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('open');
+}
+function closeModalOutside(e) {
+  if (e.target === document.getElementById('modal-overlay')) closeModal();
+}
+function confirmCheckIn() {
+  const name    = document.getElementById('modal-name').value.trim();
+  const service = document.getElementById('modal-service').value;
+  if (!name) {
+    document.getElementById('modal-name').focus();
+    document.getElementById('modal-name').style.borderColor = '#e05c5c';
+    setTimeout(() => document.getElementById('modal-name').style.borderColor = '', 1500);
+    return;
+  }
+  const now  = new Date();
+  const h    = now.getHours(), m = now.getMinutes().toString().padStart(2,'0');
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const time = `${(h%12)||12}:${m} ${ampm}`;
+  waitList.push({ name, service, time });
+  closeModal();
+  renderWaitList();
+}
+renderWaitList();
+
+// ── GALLERY ───────────────────────────────────────────────────
+function buildGallery() {
+  const grid = document.getElementById('photo-grid');
+  GALLERY_PHOTOS.forEach(photo => {
+    const item = document.createElement('div');
+    item.className = 'photo-item';
+    if (photo.src) {
+      item.innerHTML = `<img src="${photo.src}" alt="${photo.label}" loading="lazy" />
+        <div class="photo-label">${photo.label}</div>`;
+    } else {
+      item.innerHTML = `
+        <div class="photo-placeholder">
+          <div class="ph-icon">✂️</div>
+          <div class="ph-text">${photo.label}<br/><span style="font-size:9px;opacity:0.6;">Add photo</span></div>
+        </div>
+        <div class="photo-label">${photo.label}</div>`;
+    }
+    grid.appendChild(item);
+  });
+}
+buildGallery();
+
+// ── CALENDAR EMBED CHECK ──────────────────────────────────────
+// If you've replaced the placeholder URL, hide the note and show the iframe
+(function() {
+  const note = document.getElementById('cal-note');
+  const wrap = document.getElementById('cal-frame-wrap');
+  const iframe = wrap ? wrap.querySelector('iframe') : null;
+  if (iframe && iframe.src && !iframe.src.includes('PASTE_YOUR')) {
+    note.style.display = 'none';
+    wrap.style.display = 'block';
+  }
+})();
+</script>
+</body>
+</html>
