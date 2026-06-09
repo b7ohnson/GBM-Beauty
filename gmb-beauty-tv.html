@@ -160,7 +160,9 @@
     .gold-line{width:48px;height:2px;background:linear-gradient(90deg,var(--gold),transparent);margin-top:6px}
 
     /* Services */
-    .svc-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+    .svc-scroll-wrap{flex:1;overflow:hidden;position:relative;min-height:0}
+    .svc-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;overflow-y:scroll;height:100%;scrollbar-width:none;-ms-overflow-style:none}
+    .svc-grid::-webkit-scrollbar{display:none}
     .svc-cat{grid-column:1/-1;font-family:'Playfair Display',serif;font-size:14px;font-style:italic;color:var(--gold);border-bottom:1px solid var(--border);padding-bottom:5px;margin-top:8px}
     .svc-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px}
     .svc-name{font-size:15px;font-weight:700}
@@ -262,8 +264,10 @@
         <div class="panel-icon">💎</div>
         <div><div class="panel-title">Services <span>&amp; Prices</span></div><div class="panel-sub">All services by licensed professionals · Prices vary by length &amp; density</div><div class="gold-line"></div></div>
       </div>
-      <div class="svc-grid" id="svc-grid">
-        <!-- Populated by JS (Firebase or default) -->
+      <div class="svc-scroll-wrap">
+        <div class="svc-grid" id="svc-grid">
+          <!-- Populated by JS (Firebase or default) -->
+        </div>
       </div>
     </div>
 
@@ -377,7 +381,7 @@ setInterval(loadWeather,10*60*1000);
 
 // ── PANELS ─────────────────────────────────────────────────
 const PANEL_IDS=['panel-services','panel-gallery','panel-specials','panel-instagram'];
-const ROTATE=14000;
+const PANEL_DURATIONS={'panel-services':35000,'panel-gallery':14000,'panel-specials':14000,'panel-instagram':20000};
 let cur=0;
 const dotsEl=document.getElementById('panel-dots');
 PANEL_IDS.forEach((_,i)=>{
@@ -385,22 +389,56 @@ PANEL_IDS.forEach((_,i)=>{
   d.className='dot'+(i===0?' active':'');
   d.onclick=()=>goTo(i); dotsEl.appendChild(d);
 });
+
+// ── SERVICES AUTO-SCROLL ───────────────────────────────────
+let _scrollRaf=null;
+function startServiceScroll(){
+  const grid=document.getElementById('svc-grid');
+  if(!grid)return;
+  grid.scrollTop=0;
+  const maxScroll=grid.scrollHeight-grid.clientHeight;
+  if(maxScroll<=0)return;
+  const duration=PANEL_DURATIONS['panel-services']-3000; // pause 3s at top before scrolling
+  let startTime=null;
+  function step(ts){
+    if(!startTime)startTime=ts;
+    const elapsed=ts-startTime-3000; // 3s delay at top
+    if(elapsed<0){_scrollRaf=requestAnimationFrame(step);return;}
+    const progress=Math.min(elapsed/duration,1);
+    // ease in-out for smooth feel
+    const eased=progress<0.5?2*progress*progress:1-Math.pow(-2*progress+2,2)/2;
+    grid.scrollTop=maxScroll*eased;
+    if(progress<1)_scrollRaf=requestAnimationFrame(step);
+  }
+  _scrollRaf=requestAnimationFrame(step);
+}
+function stopServiceScroll(){
+  if(_scrollRaf){cancelAnimationFrame(_scrollRaf);_scrollRaf=null;}
+  const grid=document.getElementById('svc-grid');
+  if(grid)grid.scrollTop=0;
+}
+
 function goTo(idx){
+  if(PANEL_IDS[cur]==='panel-services')stopServiceScroll();
   document.getElementById(PANEL_IDS[cur]).classList.remove('active');
   dotsEl.children[cur].classList.remove('active');
   cur=idx;
   document.getElementById(PANEL_IDS[cur]).classList.add('active');
   dotsEl.children[cur].classList.add('active');
+  if(PANEL_IDS[cur]==='panel-services')startServiceScroll();
   resetBar();
 }
 function resetBar(){
   clearTimeout(window._rt);
+  const rotate=PANEL_DURATIONS[PANEL_IDS[cur]]||14000;
   const b=document.getElementById('progress-bar');
   b.style.transition='none';b.style.width='0%';
-  requestAnimationFrame(()=>{b.style.transition=`width ${ROTATE}ms linear`;b.style.width='100%';});
-  window._rt=setTimeout(()=>goTo((cur+1)%PANEL_IDS.length),ROTATE);
+  requestAnimationFrame(()=>{b.style.transition=`width ${rotate}ms linear`;b.style.width='100%';});
+  window._rt=setTimeout(()=>goTo((cur+1)%PANEL_IDS.length),rotate);
 }
 resetBar();
+// Start scroll on first load since services is panel 0
+startServiceScroll();
 
 // ── HELPERS ────────────────────────────────────────────────
 function displayName(n){
