@@ -273,10 +273,10 @@
       <div id="ig-placeholder" class="ig-placeholder">
         <div class="ig-icon">📷</div>
         <h3>Connect Your Instagram</h3>
-        <p>Sign up free at <strong>snapwidget.com</strong>, connect your Instagram,<br/>copy your widget embed URL, then paste it into Admin → Settings → Instagram Embed.</p>
-        <p style="margin-top:12px">Or update <code>PASTE_SNAPWIDGET_URL</code> directly in this file.</p>
+        <p>Go to <strong>elfsight.com</strong>, create a free Instagram Feed widget,<br/>copy the App ID (e.g. <code>elfsight-app-xxxx</code>), then paste it into Admin → Settings → Instagram Embed.</p>
       </div>
-      <iframe id="ig-frame" src="PASTE_SNAPWIDGET_URL" title="GMB Beauty Instagram"></iframe>
+      <div id="ig-embed" style="display:none;width:100%;height:100%;overflow:hidden"></div>
+      <iframe id="ig-frame" src="" title="GMB Beauty Instagram" style="display:none;width:100%;height:100%;border:none"></iframe>
     </div>
   </div>
 
@@ -558,14 +558,32 @@ window._renderGallery=buildGallery;
 buildGallery(DEFAULT_GALLERY);
 
 // ── INSTAGRAM ──────────────────────────────────────────────
-window._setInstagram=function(src){
-  if(!src||src.includes('PASTE_'))return;
+window._setInstagram=function(val){
+  if(!val||!val.trim())return;
+  val=val.trim();
   document.getElementById('ig-placeholder').style.display='none';
-  const f=document.getElementById('ig-frame');
-  f.src=src; f.style.display='block';
+
+  if(val.toLowerCase().includes('elfsight')){
+    // Elfsight widget — extract app ID and inject script + div
+    // Accept full class name like "elfsight-app-xxxx" or just the ID portion
+    const appId=val.startsWith('elfsight-app-')?val:val.replace(/[^a-z0-9-]/gi,'');
+    const embed=document.getElementById('ig-embed');
+    embed.style.display='block';
+    embed.innerHTML=`<div class="${appId}" data-elfsight-app-lazy></div>`;
+    // Load Elfsight platform script once
+    if(!document.getElementById('elfsight-script')){
+      const s=document.createElement('script');
+      s.id='elfsight-script';
+      s.src='https://static.elfsight.com/platform/platform.js';
+      s.async=true;
+      document.head.appendChild(s);
+    }
+  } else {
+    // SnapWidget or other iframe-based embed
+    const f=document.getElementById('ig-frame');
+    f.src=val; f.style.display='block';
+  }
 };
-// Check if already configured
-(()=>{const f=document.getElementById('ig-frame');if(f.src&&!f.src.includes('PASTE_'))window._setInstagram(f.src);})();
 </script>
 </body>
 </html>
