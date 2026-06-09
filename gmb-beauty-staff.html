@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>GMB Beauty – Staff</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700&family=Lato:wght@300;400;700&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+
+  <script type="module">
+    try {
+      const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
+      const { getDatabase, ref, onValue, update, remove, increment } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js");
+
+      const firebaseConfig = {
+        apiKey:"AIzaSyDujypyhEgmAZalHwe21gwCCPnL7fkOrp4",
+        authDomain:"gbm-beauty-platform.firebaseapp.com",
+        databaseURL:"https://gbm-beauty-platform-default-rtdb.firebaseio.com",
+        projectId:"gbm-beauty-platform",
+        storageBucket:"gbm-beauty-platform.firebasestorage.app",
+        messagingSenderId:"568438954424",
+        appId:"1:568438954424:web:d7074f32727638784b174d"
+      };
+
+      // Skip if config is still placeholder
+      if(firebaseConfig.databaseURL.includes('PASTE')){
+        console.warn('GMB: Firebase config not set — running in offline mode.');
+      } else {
+        const app=initializeApp(firebaseConfig);
+        const db=getDatabase(app);
+
+        onValue(ref(db,'waitlist'),snap=>{
+          const data=snap.val()||{};
+          window._liveQueue=Object.entries(data).sort((a,b)=>a[1].ts-b[1].ts);
+          if(window._authed && window._renderStaff) window._renderStaff(window._liveQueue);
+        });
+
+        onValue(ref(db,'config/settings'),snap=>{
+          const s=snap.val()||{};
+          if(s.reviewUrl) window._reviewUrl=s.reviewUrl;
+          const smsEl=document.getElementById('sms-key');
+          if(s.smsKey && smsEl) smsEl.value=s.smsKey;
+        });
+
+        window._fbUpdate=(key,patch)=>update(ref(db,`waitlist/${key}`),patch);
+        window._fbRemove=key=>remove(ref(db,`waitlist/${key}`));
+
+        window._fbAnalytics=async(entry)=>{
+          const today=new Date().toISOString().split('T')[0];
+          const hr=new Date().getHours();
+          const svc=(entry.service||'other').replace(/[.#$/[\]]/g,'_');
+          try{
+            await update(ref(db,`analytics/daily/${today}`),{
+              total:increment(1),
+              [`services/${svc}`]:increment(1),
+              [`hours/${hr}`]:increment(1),
+            });
+          }catch(e){}
+        };
+      }
+    } catch(err) {
+      console.warn('GMB: Firebase failed to load —', err.message);
+    }
+  </script>
+
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#080f0b;--card:#0f2418;--card2:rgba(255,255,255,.04);
+      --border:rgba(201,168,76,.22);--gold:#c9a84c;--gold-lt:#e2c97a;
+      --green:#1e5c38;--green-lt:#2a7a4d;--white:#f5f0e8;--muted:rgba(245,240,232,.5);
+      --red:#e05c5c;--active:#5ecf8a;--blue:#7ab8ff;
+    }
+    html,body{width:100%;min-height:100vh;background:var(--bg);color:var(--white);font-family:'Lato',sans-serif;-webkit-font-smoothing:antialiased}
+
+    /* PIN */
+    #pin-screen{position:fixed;inset:0;z-index:999;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px}
+    #pin-screen.hidden{display:none}
+    .pin-logo{width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,var(--green),var(--green-lt));border:2px solid var(--gold);display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-size:28px;font-weight:700;color:var(--gold);margin-bottom:18px}
+    #pin-screen h1{font-family:'Playfair Display',serif;font-size:24px;margin-bottom:3px}
+    #pin-screen h1 span{color:var(--gold)}
+    #pin-screen p{font-size:13px;color:var(--muted);margin-bottom:28px}
+    .pin-dots{display:flex;gap:14px;margin-bottom:26px}
+    .pin-dot{width:16px;height:16px;border-radius:50%;border:2px solid var(--border);background:transparent;transition:all .2s}
+    .pin-dot.filled{background:var(--gold);border-color:var(--gold)}
+    .pin-pad{display:grid;grid-template-columns:repeat(3,72px);gap:12px}
+    .pin-key{height:64px;border-radius:16px;background:var(--card);border:1px solid var(--border);color:var(--white);font-size:24px;font-weight:700;cursor:pointer;transition:all .15s;-webkit-tap-highlight-color:transparent;display:flex;align-items:center;justify-content:center}
+    .pin-key:active{background:var(--green);border-color:var(--gold);transform:scale(.95)}
+    .pin-key.del{font-size:18px;color:var(--muted)}
+    .pin-error{color:var(--red);font-size:13px;margin-top:14px;min-height:20px}
+
+    /* MAIN */
+    #main-app{display:none;min-height:100vh;flex-direction:column}
+    #main-app.show{display:flex}
+
+    header{background:linear-gradient(90deg,#040a06,#0f2418,#040a06);border-bottom:1px solid var(--border);padding:12px 18px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:50}
+    .hlogo{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--green),var(--green-lt));border:1px solid var(--gold);display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-size:15px;font-weight:700;color:var(--gold);flex-shrink:0}
+    .hname{font-family:'Playfair Display',serif;font-size:17px;font-weight:700}
+    .hname span{color:var(--gold)}
+    .hsub{font-size:10px;color:var(--muted)}
+    .hclock{margin-left:auto;font-size:17px;font-weight:700;color:var(--gold)}
+    .lock-btn{padding:7px 13px;border-radius:9px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;font-weight:700;cursor:pointer;margin-left:8px;transition:all .2s}
+    .lock-btn:hover{border-color:var(--red);color:var(--red)}
+
+    #content{flex:1;padding:14px;max-width:700px;margin:0 auto;width:100%}
+
+    /* Stats */
+    .stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
+    .stat-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 10px;text-align:center}
+    .stat-n{font-family:'Playfair Display',serif;font-size:24px;font-weight:700;color:var(--gold)}
+    .stat-n.g{color:var(--active)}
+    .stat-l{font-size:9px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-top:1px}
+
+    /* SMS bar */
+    .sms-bar{background:var(--card2);border:1px solid var(--border);border-radius:11px;padding:10px 13px;margin-bottom:13px;display:flex;align-items:center;gap:10px}
+    .sms-bar label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);white-space:nowrap}
+    .sms-bar input{flex:1;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:7px;padding:7px 10px;color:var(--white);font-size:12px;outline:none;font-family:'Lato',sans-serif}
+    .sms-bar input:focus{border-color:var(--gold)}
+    .sms-bar a{font-size:11px;color:var(--gold);white-space:nowrap;text-decoration:none}
+
+    /* Auto-SMS toggle */
+    .auto-sms-row{display:flex;align-items:center;justify-content:space-between;background:var(--card2);border:1px solid var(--border);border-radius:11px;padding:10px 13px;margin-bottom:13px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+    .auto-sms-label{font-size:12px;font-weight:700;color:var(--white)}
+    .auto-sms-sub{font-size:10px;color:var(--muted);margin-top:2px}
+    .toggle{width:44px;height:24px;border-radius:12px;background:var(--border);position:relative;transition:background .2s;flex-shrink:0}
+    .toggle.on{background:var(--green)}
+    .toggle::after{content:'';position:absolute;width:18px;height:18px;border-radius:50%;background:var(--white);top:3px;left:3px;transition:transform .2s}
+    .toggle.on::after{transform:translateX(20px)}
+
+    /* Stylists */
+    .stylists-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:13px}
+    .stylist-toggle{display:flex;align-items:center;gap:7px;background:var(--card);border:1px solid var(--border);border-radius:9px;padding:7px 13px;cursor:pointer;transition:all .2s;-webkit-tap-highlight-color:transparent}
+    .stylist-toggle.available{border-color:rgba(94,207,138,.4);background:rgba(94,207,138,.08)}
+    .st-dot{width:9px;height:9px;border-radius:50%;background:var(--border);transition:background .2s;flex-shrink:0}
+    .stylist-toggle.available .st-dot{background:var(--active)}
+    .st-name{font-size:12px;font-weight:700}
+    .stylist-toggle.available .st-name{color:var(--active)}
+
+    /* Section */
+    .section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:11px}
+    .section-title{font-family:'Playfair Display',serif;font-size:17px;font-weight:700}
+    .section-title span{color:var(--gold)}
+    .section-count{font-size:11px;color:var(--muted)}
+
+    /* Queue cards */
+    #queue-list{display:flex;flex-direction:column;gap:11px;margin-bottom:22px}
+    .staff-card{background:var(--card);border:1px solid var(--border);border-radius:15px;overflow:hidden;animation:slideIn .3s ease}
+    @keyframes slideIn{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:translateY(0)}}
+    .staff-card.in-service{border-color:rgba(94,207,138,.4)}
+    .staff-card.notified{border-color:rgba(122,184,255,.4)}
+
+    .sc-top{padding:13px 15px 9px;display:flex;align-items:flex-start;gap:11px}
+    .sc-num{width:34px;height:34px;flex-shrink:0;border-radius:50%;background:var(--green);border:1px solid var(--gold);display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-size:14px;font-weight:700;color:var(--gold)}
+    .staff-card.in-service .sc-num{background:var(--active);border-color:var(--active);color:#080f0b}
+    .sc-info{flex:1;min-width:0}
+    .sc-name-row{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+    .sc-name{font-size:16px;font-weight:700}
+    .sc-badge{font-size:8px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;padding:2px 7px;border-radius:8px}
+    .sc-badge.waiting{background:rgba(201,168,76,.15);color:var(--gold);border:1px solid rgba(201,168,76,.3)}
+    .sc-badge.service{background:rgba(94,207,138,.15);color:var(--active);border:1px solid rgba(94,207,138,.3)}
+    .sc-badge.notified{background:rgba(122,184,255,.15);color:var(--blue);border:1px solid rgba(122,184,255,.3)}
+    .sc-badge.bday{background:rgba(201,168,76,.25);color:var(--gold-lt);border:1px solid var(--gold)}
+    .sc-service{font-size:11px;color:var(--muted);margin-top:3px}
+    .sc-meta{font-size:10px;color:var(--muted);margin-top:2px}
+    .sc-meta .phone{color:var(--gold-lt)}
+    .sc-timer{font-size:11px;color:var(--active);font-weight:700;margin-top:3px}
+    .sc-notes{font-size:11px;color:var(--blue);margin-top:4px;background:rgba(122,184,255,.07);border-radius:5px;padding:3px 8px}
+
+    .sc-assign{padding:0 15px 8px;display:flex;align-items:center;gap:8px}
+    .sc-assign label{font-size:10px;color:var(--muted);white-space:nowrap}
+    .sc-assign select{flex:1;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:7px;padding:6px 9px;color:var(--white);font-size:12px;outline:none;font-family:'Lato',sans-serif;-webkit-appearance:none}
+    .sc-assign select:focus{border-color:var(--gold)}
+    .sc-assign select option{background:#0f2418}
+
+    .sc-note-area{padding:0 15px 8px}
+    .sc-note-input{width:100%;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:7px;padding:7px 9px;color:var(--white);font-size:12px;font-family:'Lato',sans-serif;outline:none;resize:none;height:48px}
+    .sc-note-input:focus{border-color:var(--gold)}
+    .sc-note-input::placeholder{color:rgba(245,240,232,.22)}
+
+    .sc-actions{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;border-top:1px solid var(--border);background:var(--border)}
+    .sc-btn{padding:10px 5px;background:var(--card);border:none;color:var(--muted);font-size:11px;font-weight:700;cursor:pointer;transition:all .2s;-webkit-tap-highlight-color:transparent;display:flex;flex-direction:column;align-items:center;gap:2px}
+    .sc-btn:active{opacity:.7}
+    .sc-btn .bi{font-size:15px}
+    .sc-btn.btn-svc{color:var(--active)}
+    .sc-btn.btn-svc:hover{background:rgba(94,207,138,.1)}
+    .sc-btn.btn-sms{color:var(--blue)}
+    .sc-btn.btn-sms:hover{background:rgba(122,184,255,.1)}
+    .sc-btn.btn-done{color:var(--red)}
+    .sc-btn.btn-done:hover{background:rgba(224,92,92,.1)}
+    .sc-btn:disabled{opacity:.35;cursor:not-allowed}
+
+    #q-empty{text-align:center;padding:36px 18px;color:var(--muted);border:1px dashed var(--border);border-radius:13px}
+    #q-empty .big{font-size:38px;margin-bottom:10px}
+
+    /* Review modal */
+    #review-modal{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px);padding:20px}
+    #review-modal.open{display:flex}
+    .review-box{background:var(--card);border:1px solid var(--gold);border-radius:20px;padding:28px 24px;width:min(380px,95vw);text-align:center}
+    .review-box h2{font-family:'Playfair Display',serif;font-size:22px;color:var(--gold);margin-bottom:6px}
+    .review-box p{font-size:13px;color:var(--muted);margin-bottom:18px;line-height:1.6}
+    #modal-qr{display:flex;justify-content:center;margin-bottom:14px}
+    #modal-qr img{border-radius:10px;border:3px solid var(--gold);width:160px;height:160px}
+    .modal-close{width:100%;padding:13px;background:var(--green);border:1px solid var(--gold);border-radius:12px;color:var(--gold-lt);font-size:15px;font-weight:700;cursor:pointer;transition:all .2s}
+    .modal-close:active{opacity:.8}
+
+    /* Toast */
+    #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--green);border:1px solid var(--gold);border-radius:11px;padding:11px 20px;font-size:13px;font-weight:700;color:var(--gold-lt);transition:transform .3s ease;z-index:100;white-space:nowrap}
+    #toast.show{transform:translateX(-50%) translateY(0)}
+  </style>
+</head>
+<body>
+
+<!-- PIN -->
+<div id="pin-screen">
+  <div class="pin-logo">G</div>
+  <h1>GMB <span>Staff</span></h1>
+  <p>Enter your PIN to access the dashboard</p>
+  <div class="pin-dots" id="pin-dots">
+    <div class="pin-dot" id="pd-0"></div><div class="pin-dot" id="pd-1"></div>
+    <div class="pin-dot" id="pd-2"></div><div class="pin-dot" id="pd-3"></div>
+  </div>
+  <div class="pin-pad">
+    <button class="pin-key" onclick="pinKey('1')">1</button>
+    <button class="pin-key" onclick="pinKey('2')">2</button>
+    <button class="pin-key" onclick="pinKey('3')">3</button>
+    <button class="pin-key" onclick="pinKey('4')">4</button>
+    <button class="pin-key" onclick="pinKey('5')">5</button>
+    <button class="pin-key" onclick="pinKey('6')">6</button>
+    <button class="pin-key" onclick="pinKey('7')">7</button>
+    <button class="pin-key" onclick="pinKey('8')">8</button>
+    <button class="pin-key" onclick="pinKey('9')">9</button>
+    <div></div>
+    <button class="pin-key" onclick="pinKey('0')">0</button>
+    <button class="pin-key del" onclick="pinDel()">⌫</button>
+  </div>
+  <div class="pin-error" id="pin-error"></div>
+</div>
+
+<!-- MAIN -->
+<div id="main-app">
+  <header>
+    <div class="hlogo">G</div>
+    <div><div class="hname">GMB <span>Beauty</span></div><div class="hsub">Staff Dashboard</div></div>
+    <div class="hclock" id="clock">–:– –M</div>
+    <button class="lock-btn" onclick="lockApp()">🔒 Lock</button>
+  </header>
+
+  <div id="content">
+    <div class="stats-row">
+      <div class="stat-card"><div class="stat-n" id="stat-w">0</div><div class="stat-l">Waiting</div></div>
+      <div class="stat-card"><div class="stat-n g" id="stat-s">0</div><div class="stat-l">In Chair</div></div>
+      <div class="stat-card"><div class="stat-n" id="stat-t">0</div><div class="stat-l">Today</div></div>
+      <div class="stat-card"><div class="stat-n" id="stat-avg" style="font-size:16px">–</div><div class="stat-l">Avg Wait</div></div>
+    </div>
+
+    <div class="sms-bar">
+      <label>📱 SMS Key</label>
+      <input type="text" id="sms-key" placeholder="textbelt (free) or paid key"/>
+      <a href="https://textbelt.com" target="_blank">Get key →</a>
+    </div>
+
+    <div class="auto-sms-row" onclick="toggleAutoSms()">
+      <div><div class="auto-sms-label">🤖 Auto-notify when next in line</div><div class="auto-sms-sub">Automatically texts client when they reach position #1</div></div>
+      <div class="toggle" id="auto-toggle"></div>
+    </div>
+
+    <div class="stylists-row" id="stylists-row"></div>
+
+    <div class="section-head">
+      <div class="section-title">Queue <span>Management</span></div>
+      <div class="section-count" id="q-count">0 guests</div>
+    </div>
+    <div id="queue-list">
+      <div id="q-empty"><div class="big">🌿</div><div>No one in queue</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Review modal -->
+<div id="review-modal">
+  <div class="review-box">
+    <h2>Thank You! 💛</h2>
+    <p>Please show this QR code to your client — it takes 60 seconds and means everything to the salon!</p>
+    <div id="modal-qr"></div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:16px">Scan to leave a Google Review</div>
+    <button class="modal-close" onclick="closeReviewModal()">Close ✓</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const STAFF_PIN='1234'; // ← Change this PIN
+const STYLISTS=['Stylist 1','Stylist 2','Stylist 3'];
+const SVC_DUR={'Wash & Set':60,'Silk Press':90,'Relaxer':120,'Color & Highlights':150,'Deep Condition':45,'Trim & Dusting':30,'Box Braids':240,'Knotless Braids':270,'Senegalese Twists':240,'Cornrows':90,'TWA Shapeup':60,'Loc Retwist':120,'Loc Starter':180,'Not Sure / Other':60};
+
+window._authed=false;
+window._reviewUrl='https://g.page/r/YOUR_GOOGLE_REVIEW_LINK';
+let autoSms=true;
+let totalToday=0;
+let prevFirstKey=null;
+let waitTimes=[];
+
+// ── PIN ────────────────────────────────────────────────────
+let pinBuf='';
+function pinKey(k){if(pinBuf.length>=4)return;pinBuf+=k;updateDots();if(pinBuf.length===4)setTimeout(checkPin,80);}
+function pinDel(){pinBuf=pinBuf.slice(0,-1);updateDots();document.getElementById('pin-error').textContent='';}
+function updateDots(){for(let i=0;i<4;i++)document.getElementById(`pd-${i}`).classList.toggle('filled',i<pinBuf.length);}
+function checkPin(){
+  if(pinBuf===STAFF_PIN){
+    window._authed=true;
+    document.getElementById('pin-screen').classList.add('hidden');
+    document.getElementById('main-app').classList.add('show');
+    if(window._liveQueue)window._renderStaff(window._liveQueue);
+    buildStylists();buildReviewQR();
+  }else{document.getElementById('pin-error').textContent='Incorrect PIN.';pinBuf='';updateDots();setTimeout(()=>document.getElementById('pin-error').textContent='',2000);}
+}
+function lockApp(){window._authed=false;pinBuf='';updateDots();document.getElementById('main-app').classList.remove('show');document.getElementById('pin-screen').classList.remove('hidden');}
+
+// ── CLOCK ──────────────────────────────────────────────────
+function tick(){const n=new Date(),h=n.getHours(),m=n.getMinutes().toString().padStart(2,'0'),ampm=h>=12?'PM':'AM';document.getElementById('clock').textContent=`${(h%12)||12}:${m} ${ampm}`;}
+setInterval(tick,1000);tick();
+
+// ── AUTO SMS TOGGLE ────────────────────────────────────────
+function toggleAutoSms(){autoSms=!autoSms;document.getElementById('auto-toggle').classList.toggle('on',autoSms);toast(autoSms?'Auto-notify ON':'Auto-notify OFF');}
+document.getElementById('auto-toggle').classList.add('on');
+
+// ── STYLISTS ───────────────────────────────────────────────
+const stylistStatus={};
+STYLISTS.forEach(s=>stylistStatus[s]=true);
+function buildStylists(){
+  const row=document.getElementById('stylists-row');row.innerHTML='';
+  STYLISTS.forEach(name=>{
+    const btn=document.createElement('div');
+    btn.className='stylist-toggle'+(stylistStatus[name]?' available':'');
+    btn.innerHTML=`<div class="st-dot"></div><div class="st-name">${esc(name)}</div>`;
+    btn.onclick=()=>{stylistStatus[name]=!stylistStatus[name];buildStylists();};
+    row.appendChild(btn);
+  });
+}
+
+// ── REVIEW QR ──────────────────────────────────────────────
+function buildReviewQR(){
+  ['modal-qr'].forEach(id=>{
+    const c=document.getElementById(id);if(!c)return;c.innerHTML='';
+    const url=window._reviewUrl||'';
+    if(!url||url.includes('YOUR_GOOGLE'))return;
+    try{const qr=qrcode(0,'M');qr.addData(url);qr.make();const img=document.createElement('img');img.src=qr.createDataURL(6,4);c.appendChild(img);}catch(e){}
+  });
+}
+function openReviewModal(name){
+  buildReviewQR();
+  document.querySelector('#review-modal .review-box h2').textContent=`Thank you, ${name}! 💛`;
+  document.getElementById('review-modal').classList.add('open');
+}
+function closeReviewModal(){document.getElementById('review-modal').classList.remove('open');}
+
+// ── SMS ────────────────────────────────────────────────────
+async function sendSms(phone,name,msg){
+  if(!phone){toast('No phone on file for '+name);return false;}
+  const key=document.getElementById('sms-key').value.trim()||'textbelt';
+  const message=msg||`Hi ${name.split(' ')[0]}! You're next at GMB Beauty 💅 Please head back in.`;
+  try{
+    const r=await fetch('https://textbelt.com/text',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone,message,key})});
+    const d=await r.json();
+    if(d.success){toast(`✓ Text sent to ${name}`);return true;}
+    else{toast('SMS failed: '+(d.error||'check key'));return false;}
+  }catch(e){toast('SMS error — check connection');return false;}
+}
+
+// ── SERVICE TIMER ──────────────────────────────────────────
+setInterval(()=>{
+  document.querySelectorAll('.sc-timer[data-start]').forEach(el=>{
+    const start=parseInt(el.dataset.start);
+    const mins=Math.floor((Date.now()-start)/60000);
+    const h=Math.floor(mins/60),m=mins%60;
+    el.textContent=h?`In chair: ${h}h ${m}m`:`In chair: ${m} min`;
+  });
+},30000);
+
+// ── AUTO-NOTIFY CHECK ──────────────────────────────────────
+function checkAutoNotify(entries){
+  const waiting=entries.filter(([,e])=>e.status==='waiting'||e.status==='notified');
+  if(!waiting.length){prevFirstKey=null;return;}
+  const[firstKey,firstEntry]=waiting[0];
+  if(firstKey!==prevFirstKey){
+    prevFirstKey=firstKey;
+    if(autoSms&&firstEntry.phone&&!firstEntry.notified&&firstEntry.autoNotify!==false){
+      sendSms(firstEntry.phone,firstEntry.name).then(ok=>{
+        if(ok&&window._fbUpdate)window._fbUpdate(firstKey,{notified:true,status:'notified'});
+      });
+    }
+  }
+}
+
+// ── QUEUE RENDER ───────────────────────────────────────────
+window._renderStaff=function(entries){
+  const list=document.getElementById('queue-list');
+  const empty=document.getElementById('q-empty');
+  const visible=entries.filter(([,e])=>e.status!=='done');
+  const waiting=visible.filter(([,e])=>e.status!=='in-service');
+  const inSvc=visible.filter(([,e])=>e.status==='in-service');
+
+  document.getElementById('stat-w').textContent=waiting.length;
+  document.getElementById('stat-s').textContent=inSvc.length;
+  totalToday=Math.max(totalToday,entries.filter(([,e])=>e.status==='done'||visible.find(([k])=>k===e.key)).length);
+  document.getElementById('stat-t').textContent=totalToday;
+  const avgW=waitTimes.length?Math.round(waitTimes.reduce((a,b)=>a+b,0)/waitTimes.length):null;
+  document.getElementById('stat-avg').textContent=avgW?`${avgW}m`:'–';
+  document.getElementById('q-count').textContent=`${visible.length} guest${visible.length!==1?'s':''}`;
+
+  checkAutoNotify(entries);
+
+  list.innerHTML='';
+  if(!visible.length){list.appendChild(empty);return;}
+
+  visible.forEach(([key,e],i)=>{
+    const isSvc=e.status==='in-service';
+    const isNot=e.status==='notified';
+    const isBday=isBirthdayToday(e.birthday);
+    const card=document.createElement('div');
+    card.className=`staff-card${isSvc?' in-service':isNot?' notified':''}`;
+
+    const badgeCls=isSvc?'service':isNot?'notified':'waiting';
+    const badgeTxt=isSvc?'In Service':isNot?'Notified':'Waiting';
+    const bdayBadge=isBday?'<span class="sc-badge bday">🎂 Birthday</span>':'';
+    const phoneHtml=e.phone?`<span class="phone">📱 ${fmtPhone(e.phone)}</span> · `:'';
+    const timerHtml=isSvc&&e.serviceStartTs?`<div class="sc-timer" data-start="${e.serviceStartTs}">In chair: calculating…</div>`:'';
+    const notesHtml=e.notes?`<div class="sc-notes">📝 ${esc(e.notes)}</div>`:'';
+
+    card.innerHTML=`
+      <div class="sc-top">
+        <div class="sc-num">${isSvc?'✦':i+1}</div>
+        <div class="sc-info">
+          <div class="sc-name-row">
+            <div class="sc-name">${esc(e.name)}</div>
+            <span class="sc-badge ${badgeCls}">${badgeTxt}</span>${bdayBadge}
+          </div>
+          <div class="sc-service">${esc(e.service||'Service TBD')} · ${SVC_DUR[e.service]||60} min</div>
+          <div class="sc-meta">${phoneHtml}Checked in ${esc(e.timeStr||'')} · Pref: ${esc(e.stylistPref||'Any')}</div>
+          ${timerHtml}${notesHtml}
+        </div>
+      </div>
+      <div class="sc-assign">
+        <label>Assign:</label>
+        <select onchange="window._fbUpdate('${key}',{assignedStylist:this.value||null})">
+          <option value="">Unassigned</option>
+          ${STYLISTS.map(s=>`<option value="${s}"${e.assignedStylist===s?' selected':''}>${s}</option>`).join('')}
+        </select>
+      </div>
+      <div class="sc-note-area">
+        <textarea class="sc-note-input" placeholder="Notes for stylist…" onblur="window._fbUpdate('${key}',{notes:this.value||null})">${esc(e.notes||'')}</textarea>
+      </div>
+      <div class="sc-actions">
+        ${!isSvc?`<button class="sc-btn btn-svc" onclick="markService('${key}')"><span class="bi">▶</span>In Service</button>`:
+                  `<button class="sc-btn" disabled><span class="bi">✦</span>In Chair</button>`}
+        <button class="sc-btn btn-sms" onclick="notifyClient('${key}','${esc(e.name)}','${e.phone||''}')"
+          ${e.notified?'style="opacity:.6"':''}>
+          <span class="bi">📱</span>${e.notified?'Re-notify':'Notify'}
+        </button>
+        <button class="sc-btn btn-done" onclick="markDone('${key}','${esc(e.name)}','${e.service||''}',${e.ts||0})">
+          <span class="bi">✓</span>Done
+        </button>
+      </div>`;
+    list.appendChild(card);
+  });
+
+  // Trigger timer display
+  document.querySelectorAll('.sc-timer[data-start]').forEach(el=>{
+    const start=parseInt(el.dataset.start);
+    const mins=Math.floor((Date.now()-start)/60000);
+    const h=Math.floor(mins/60),m=mins%60;
+    el.textContent=h?`In chair: ${h}h ${m}m`:`In chair: ${m} min`;
+  });
+};
+
+function markService(key){
+  window._fbUpdate(key,{status:'in-service',serviceStartTs:Date.now()});
+  toast('Marked as In Service');
+}
+function markDone(key,name,service,checkinTs){
+  // Record wait time for analytics
+  if(checkinTs){const w=Math.round((Date.now()-checkinTs)/60000);waitTimes.push(w);if(waitTimes.length>50)waitTimes.shift();}
+  if(window._fbAnalytics)window._fbAnalytics({service});
+  window._fbRemove(key);
+  totalToday++;
+  toast('Done ✓');
+  // Show review prompt
+  setTimeout(()=>openReviewModal(name),400);
+}
+async function notifyClient(key,name,phone){
+  const ok=await sendSms(phone,name);
+  if(ok)window._fbUpdate(key,{notified:true,status:'notified'});
+}
+
+// ── HELPERS ────────────────────────────────────────────────
+function isBirthdayToday(bd){if(!bd)return false;const t=new Date();const[mo,dy]=bd.split('-').map(Number);return t.getMonth()+1===mo&&t.getDate()===dy;}
+function fmtPhone(p){const d=String(p).replace(/\D/g,'');if(d.length===10)return`(${d.slice(0,3)}) ${d.slice(3,6)}-${d.slice(6)}`;return p;}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/'/g,'&#39;');}
+let toastT;
+function toast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),3000);}
+
+window._liveQueue=[];
+buildStylists();
+</script>
+</body>
+</html>

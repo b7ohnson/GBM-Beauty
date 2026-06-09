@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=1920"/>
+  <title>GMB Beauty – TV Display</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Lato:wght@300;400;700&display=swap" rel="stylesheet"/>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getDatabase, ref, onValue, update, remove } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey:"AIzaSyDujypyhEgmAZalHwe21gwCCPnL7fkOrp4",
+      authDomain:"gbm-beauty-platform.firebaseapp.com",
+      databaseURL:"https://gbm-beauty-platform-default-rtdb.firebaseio.com",
+      projectId:"gbm-beauty-platform",
+      storageBucket:"gbm-beauty-platform.firebasestorage.app",
+      messagingSenderId:"568438954424",
+      appId:"1:568438954424:web:d7074f32727638784b174d"
+    };
+    const app = initializeApp(firebaseConfig);
+    const db  = getDatabase(app);
+
+    onValue(ref(db,'waitlist'), snap => {
+      const data = snap.val()||{};
+      window._renderQueue(Object.entries(data).sort((a,b)=>a[1].ts-b[1].ts));
+    });
+
+    // Load admin-managed config (services, specials, gallery, settings)
+    onValue(ref(db,'config'), snap => {
+      const cfg = snap.val()||{};
+      if(cfg.services?.length)   window._renderServices(cfg.services);
+      if(cfg.specials?.length)   window._renderSpecials(cfg.specials.filter(s=>s.active));
+      if(cfg.gallery?.length)    window._renderGallery(cfg.gallery);
+      if(cfg.settings?.instagramEmbed) window._setInstagram(cfg.settings.instagramEmbed);
+      if(cfg.settings?.city)    window._weatherCity = cfg.settings.city;
+    });
+
+    window._fbDone   = key => remove(ref(db,`waitlist/${key}`));
+    window._fbStatus = (key,status) => update(ref(db,`waitlist/${key}`),{status,serviceStartTs:status==='in-service'?Date.now():null});
+  </script>
+
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#0b1a12; --sidebar:#0c1e14; --main:#0f2418; --card:rgba(255,255,255,.04);
+      --border:rgba(201,168,76,.22); --gold:#c9a84c; --gold-lt:#e2c97a;
+      --green:#1e5c38; --green-lt:#2a7a4d; --white:#f5f0e8; --muted:rgba(245,240,232,.5);
+      --active-border:rgba(46,180,100,.5); --active-bg:rgba(46,180,100,.07); --active:#5ecf8a;
+      --appt:#7ab8ff; --appt-bg:rgba(122,184,255,.07); --appt-border:rgba(122,184,255,.35);
+    }
+    html,body{width:100vw;height:100vh;background:var(--bg);color:var(--white);font-family:'Lato',sans-serif;overflow:hidden;-webkit-font-smoothing:antialiased}
+    #app{display:grid;grid-template-rows:72px 1fr 52px;grid-template-columns:400px 1fr;grid-template-areas:"topbar topbar""sidebar main""footer footer";height:100vh}
+
+    /* TOP BAR */
+    #topbar{grid-area:topbar;background:linear-gradient(90deg,#081410,#0f2418,#081410);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 32px}
+    .brand-wrap{display:flex;align-items:center;gap:14px}
+    .brand-logo{width:46px;height:46px;background:linear-gradient(135deg,var(--green),var(--green-lt));border:1px solid var(--gold);border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:var(--gold)}
+    .brand-name{font-family:'Playfair Display',serif;font-size:26px;font-weight:700;letter-spacing:1px}
+    .brand-name span{color:var(--gold)}
+    .brand-tag{font-size:11px;font-weight:300;color:var(--muted);letter-spacing:1px}
+    .topbar-right{display:flex;align-items:center;gap:24px}
+    #weather{font-size:16px;color:var(--muted);background:var(--card);border:1px solid var(--border);border-radius:10px;padding:6px 14px;letter-spacing:.5px}
+    .clock-wrap{text-align:right}
+    #clock{font-size:28px;font-weight:700;color:var(--gold);letter-spacing:2px}
+    #dateline{font-size:12px;font-weight:300;color:var(--muted);margin-top:2px}
+
+    /* SIDEBAR */
+    #sidebar{grid-area:sidebar;background:var(--sidebar);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:18px 16px;overflow:hidden}
+    .sb-head{display:flex;align-items:center;gap:12px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)}
+    .sb-icon{width:40px;height:40px;flex-shrink:0;background:var(--green);border:1px solid var(--gold);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px}
+    .sb-title{font-family:'Playfair Display',serif;font-size:19px;font-weight:700}
+    .sb-title span{color:var(--gold)}
+    .sb-sub{font-size:10px;color:var(--muted);margin-top:2px}
+    .sb-stats{display:flex;gap:8px;margin-bottom:12px}
+    .stat-pill{flex:1;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:7px 8px;text-align:center}
+    .stat-n{font-family:'Playfair Display',serif;font-size:20px;font-weight:700;color:var(--gold)}
+    .stat-n.g{color:var(--active)}
+    .stat-l{font-size:9px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-top:1px}
+
+    /* Birthday banner */
+    #bday-banner{display:none;background:linear-gradient(90deg,rgba(201,168,76,.15),rgba(201,168,76,.05));border:1px solid rgba(201,168,76,.5);border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:13px;color:var(--gold-lt);text-align:center;animation:pulse 2s infinite}
+    #bday-banner.show{display:block}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.75}}
+
+    /* Lane labels */
+    .lane-label{font-size:9px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:6px 0 4px;padding-bottom:4px;border-bottom:1px solid var(--border)}
+    .lane-label.appt-lane{color:var(--appt)}
+
+    #queue-list{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:8px}
+    #queue-list::-webkit-scrollbar{width:3px}
+    #queue-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+
+    .q-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:11px 13px;animation:slideIn .4s ease;position:relative}
+    @keyframes slideIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+    .q-card.in-service{border-color:var(--active-border);background:var(--active-bg)}
+    .q-card.first{border-color:rgba(201,168,76,.45);background:rgba(201,168,76,.05)}
+    .q-card.appt{border-color:var(--appt-border);background:var(--appt-bg)}
+    .q-card.bday::after{content:'🎂';position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:18px}
+
+    .q-top{display:flex;align-items:flex-start;gap:10px}
+    .q-num{width:30px;height:30px;flex-shrink:0;background:var(--green);border:1px solid var(--gold);border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-size:13px;font-weight:700;color:var(--gold);margin-top:2px}
+    .q-card.first .q-num{background:var(--gold);color:#0b1a12}
+    .q-card.in-service .q-num{background:var(--active);border-color:var(--active);color:#0b1a12}
+    .q-card.appt .q-num{background:var(--appt);border-color:var(--appt);color:#0b1a12;font-size:10px}
+    .q-info{flex:1;min-width:0}
+    .q-name-row{display:flex;align-items:center;gap:6px}
+    .q-name{font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .status-badge{font-size:8px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;padding:2px 6px;border-radius:8px;white-space:nowrap;flex-shrink:0}
+    .bw{background:rgba(201,168,76,.15);color:var(--gold);border:1px solid rgba(201,168,76,.3)}
+    .bs{background:rgba(94,207,138,.15);color:var(--active);border:1px solid rgba(94,207,138,.3)}
+    .bn{background:rgba(122,184,255,.15);color:var(--appt);border:1px solid rgba(122,184,255,.3)}
+    .q-service{font-size:10px;color:var(--muted);margin-top:3px}
+    .q-meta{display:flex;align-items:center;justify-content:space-between;margin-top:5px}
+    .q-stylist{font-size:10px;color:var(--gold-lt);font-weight:700;background:rgba(201,168,76,.1);padding:1px 7px;border-radius:5px}
+    .q-stylist.none{color:var(--muted);background:transparent}
+    .q-wait{font-size:10px;color:var(--muted)}
+    .q-wait.nxt{color:var(--gold);font-weight:700}
+    .q-wait.ins{color:var(--active)}
+    .q-actions{display:flex;gap:5px;margin-top:7px;border-top:1px solid var(--border);padding-top:7px}
+    .q-btn{flex:1;padding:5px 0;border-radius:7px;border:1px solid;font-size:10px;font-weight:700;cursor:pointer;transition:all .2s}
+    .q-btn-svc{border-color:rgba(94,207,138,.3);background:rgba(94,207,138,.1);color:var(--active)}
+    .q-btn-done{border-color:rgba(224,92,92,.3);background:rgba(224,92,92,.1);color:#e05c5c}
+    #q-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--muted);font-size:12px;text-align:center;border:1px dashed var(--border);border-radius:12px;padding:20px}
+    #q-empty .big{font-size:36px;margin-bottom:10px}
+
+    /* MAIN */
+    #main{grid-area:main;background:var(--main);position:relative;overflow:hidden}
+    .panel{position:absolute;inset:0;padding:28px 36px;opacity:0;pointer-events:none;transition:opacity .7s ease;overflow-y:auto}
+    .panel.active{opacity:1;pointer-events:all}
+    .panel::-webkit-scrollbar{width:4px}
+    .panel::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+    .panel-header{display:flex;align-items:center;gap:16px;margin-bottom:26px}
+    .panel-icon{width:50px;height:50px;flex-shrink:0;background:var(--green);border:1px solid var(--gold);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px}
+    .panel-title{font-family:'Playfair Display',serif;font-size:32px;font-weight:700}
+    .panel-title span{color:var(--gold)}
+    .panel-sub{font-size:12px;color:var(--muted);margin-top:4px}
+    .gold-line{width:48px;height:2px;background:linear-gradient(90deg,var(--gold),transparent);margin-top:6px}
+
+    /* Services */
+    .svc-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+    .svc-cat{grid-column:1/-1;font-family:'Playfair Display',serif;font-size:14px;font-style:italic;color:var(--gold);border-bottom:1px solid var(--border);padding-bottom:5px;margin-top:8px}
+    .svc-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+    .svc-name{font-size:15px;font-weight:700}
+    .svc-desc{font-size:10px;color:var(--muted);margin-top:2px}
+    .svc-time{font-size:9px;color:rgba(201,168,76,.6);margin-top:2px}
+    .svc-price{font-family:'Playfair Display',serif;font-size:22px;font-weight:700;color:var(--gold);white-space:nowrap}
+    .svc-price.from::before{content:'from ';font-size:10px;font-family:'Lato',sans-serif;font-weight:300;color:var(--muted)}
+    .svc-note{grid-column:1/-1;text-align:center;font-size:11px;color:var(--muted);font-style:italic;margin-top:6px}
+
+    /* Gallery */
+    .photo-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+    .photo-item{aspect-ratio:3/4;border-radius:14px;overflow:hidden;border:1px solid var(--border);position:relative;background:var(--card)}
+    .photo-item img{width:100%;height:100%;object-fit:cover;display:block}
+    .ph-placeholder{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}
+    .photo-item:nth-child(4n+1) .ph-placeholder{background:linear-gradient(160deg,#0f2418,#1a3a28)}
+    .photo-item:nth-child(4n+2) .ph-placeholder{background:linear-gradient(160deg,#1a2f1a,#0f2418)}
+    .photo-item:nth-child(4n+3) .ph-placeholder{background:linear-gradient(160deg,#0f1a14,#1e3a20)}
+    .photo-item:nth-child(4n+4) .ph-placeholder{background:linear-gradient(160deg,#162a1c,#0b1a12)}
+    .ph-icon{font-size:28px;opacity:.35}
+    .ph-text{font-size:10px;color:var(--muted);text-align:center;padding:0 8px}
+    .photo-label{position:absolute;bottom:0;left:0;right:0;padding:20px 10px 10px;background:linear-gradient(transparent,rgba(0,0,0,.72));font-size:11px;font-weight:700;color:var(--gold-lt);text-align:center}
+
+    /* Specials */
+    .specials-grid{display:grid;grid-template-columns:1.4fr 1fr 1fr;grid-template-rows:auto auto;gap:14px}
+    .special-hero{grid-row:1/3;background:linear-gradient(135deg,#0f2418,#1e5c38,#0f2418);border:1px solid var(--gold);border-radius:18px;padding:26px 22px;position:relative;overflow:hidden}
+    .special-hero::before{content:'✦';position:absolute;right:16px;top:8px;font-size:80px;opacity:.05;color:var(--gold)}
+    .sh-tag{display:inline-block;background:var(--gold);color:#0b1a12;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:3px 10px;border-radius:20px;margin-bottom:12px}
+    .special-hero h3{font-family:'Playfair Display',serif;font-size:26px;color:var(--white);margin-bottom:8px}
+    .special-hero p{font-size:13px;color:var(--muted);line-height:1.7}
+    .sh-price-row{margin-top:18px;display:flex;align-items:baseline;gap:10px}
+    .sh-old{font-size:15px;color:var(--muted);text-decoration:line-through}
+    .sh-new{font-family:'Playfair Display',serif;font-size:38px;font-weight:700;color:var(--gold)}
+    .sh-date{position:absolute;top:18px;right:18px;background:rgba(201,168,76,.12);border:1px solid var(--border);border-radius:8px;padding:6px 12px;text-align:center}
+    .sh-date-label{font-size:8px;color:var(--muted);letter-spacing:1px}
+    .sh-date-val{font-size:14px;font-weight:700;color:var(--gold)}
+    .spec-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px 16px}
+    .sc-tag{font-size:9px;font-weight:700;letter-spacing:1px;color:var(--gold);margin-bottom:6px}
+    .spec-card h4{font-family:'Playfair Display',serif;font-size:17px;margin-bottom:5px}
+    .spec-card p{font-size:11px;color:var(--muted);line-height:1.6}
+    .sc-price{font-family:'Playfair Display',serif;font-size:24px;font-weight:700;color:var(--gold);margin-top:10px}
+    .sc-date{font-size:9px;color:var(--muted);margin-top:3px}
+
+    /* Instagram panel */
+    #panel-instagram .ig-placeholder{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:32px;text-align:center;color:var(--muted)}
+    #panel-instagram .ig-placeholder .ig-icon{font-size:48px;margin-bottom:14px;opacity:.4}
+    #panel-instagram .ig-placeholder h3{font-family:'Playfair Display',serif;font-size:20px;color:var(--white);margin-bottom:8px}
+    #panel-instagram .ig-placeholder p{font-size:13px;line-height:1.6}
+    #panel-instagram .ig-placeholder code{background:rgba(255,255,255,.07);padding:2px 6px;border-radius:4px;font-size:11px}
+    #ig-frame{width:100%;height:calc(100% - 100px);border:none;border-radius:14px;overflow:hidden;display:none}
+
+    /* FOOTER */
+    #footer{grid-area:footer;background:linear-gradient(90deg,#081410,#0f2418,#081410);border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 32px}
+    .panel-dots{display:flex;gap:8px;align-items:center}
+    .dot{width:8px;height:8px;border-radius:50%;background:var(--border);transition:all .4s;cursor:pointer}
+    .dot.active{background:var(--gold);width:24px;border-radius:4px}
+    .footer-msg{font-size:12px;color:var(--muted);font-style:italic}
+    .footer-msg span{color:var(--gold)}
+    #progress-bar{position:fixed;bottom:52px;left:400px;right:0;height:2px;background:linear-gradient(90deg,var(--gold),var(--green-lt));width:0%;transition:width linear;z-index:50}
+  </style>
+</head>
+<body>
+<div id="app">
+  <div id="topbar">
+    <div class="brand-wrap">
+      <div class="brand-logo">G</div>
+      <div><div class="brand-name">GMB <span>Beauty</span></div><div class="brand-tag">Where Every Client Shines</div></div>
+    </div>
+    <div class="topbar-right">
+      <div id="weather">🌤️ –°F</div>
+      <div class="clock-wrap">
+        <div id="clock">–:– –M</div>
+        <div id="dateline">–</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SIDEBAR -->
+  <div id="sidebar">
+    <div class="sb-head">
+      <div class="sb-icon">💅</div>
+      <div><div class="sb-title">Walk-In <span>Queue</span></div><div class="sb-sub">Live from check-in iPad</div></div>
+    </div>
+    <div class="sb-stats">
+      <div class="stat-pill"><div class="stat-n" id="stat-w">0</div><div class="stat-l">Waiting</div></div>
+      <div class="stat-pill"><div class="stat-n g" id="stat-s">0</div><div class="stat-l">In Chair</div></div>
+      <div class="stat-pill"><div class="stat-n" id="stat-wt">–</div><div class="stat-l">Est. Wait</div></div>
+    </div>
+    <div id="bday-banner">🎂 Happy Birthday! Enjoy a special treat today!</div>
+    <div id="queue-list">
+      <div id="q-empty"><div class="big">🌿</div><div>No one in queue</div><div style="margin-top:4px;font-size:11px">Check in at the iPad</div></div>
+    </div>
+  </div>
+
+  <!-- MAIN PANELS -->
+  <div id="main">
+    <!-- Services -->
+    <div class="panel active" id="panel-services">
+      <div class="panel-header">
+        <div class="panel-icon">💎</div>
+        <div><div class="panel-title">Services <span>&amp; Prices</span></div><div class="panel-sub">All services by licensed professionals · Prices vary by length &amp; density</div><div class="gold-line"></div></div>
+      </div>
+      <div class="svc-grid" id="svc-grid">
+        <!-- Populated by JS (Firebase or default) -->
+      </div>
+    </div>
+
+    <!-- Gallery -->
+    <div class="panel" id="panel-gallery">
+      <div class="panel-header">
+        <div class="panel-icon">📸</div>
+        <div><div class="panel-title">Client <span>Gallery</span></div><div class="panel-sub">Our work speaks for itself — transformations by the GMB team</div><div class="gold-line"></div></div>
+      </div>
+      <div class="photo-grid" id="photo-grid"></div>
+    </div>
+
+    <!-- Specials -->
+    <div class="panel" id="panel-specials">
+      <div class="panel-header">
+        <div class="panel-icon">🌟</div>
+        <div><div class="panel-title">Specials <span>&amp; Promos</span></div><div class="panel-sub">Exclusive deals, promotions &amp; loyalty rewards — updated regularly</div><div class="gold-line"></div></div>
+      </div>
+      <div class="specials-grid" id="specials-grid"></div>
+    </div>
+
+    <!-- Instagram -->
+    <div class="panel" id="panel-instagram">
+      <div class="panel-header">
+        <div class="panel-icon">📱</div>
+        <div><div class="panel-title">Follow <span>@GMBBeauty</span></div><div class="panel-sub">See our latest transformations on Instagram</div><div class="gold-line"></div></div>
+      </div>
+      <div id="ig-placeholder" class="ig-placeholder">
+        <div class="ig-icon">📷</div>
+        <h3>Connect Your Instagram</h3>
+        <p>Sign up free at <strong>snapwidget.com</strong>, connect your Instagram,<br/>copy your widget embed URL, then paste it into Admin → Settings → Instagram Embed.</p>
+        <p style="margin-top:12px">Or update <code>PASTE_SNAPWIDGET_URL</code> directly in this file.</p>
+      </div>
+      <iframe id="ig-frame" src="PASTE_SNAPWIDGET_URL" title="GMB Beauty Instagram"></iframe>
+    </div>
+  </div>
+
+  <div id="footer">
+    <div class="panel-dots" id="panel-dots"></div>
+    <div class="footer-msg">Check in at the <span>iPad station</span> to join the queue ✦</div>
+    <div class="footer-msg" style="opacity:.4;font-size:11px">GMB Beauty · Columbus, OH · Walk-ins Welcome</div>
+  </div>
+</div>
+<div id="progress-bar"></div>
+
+<script>
+// ── SERVICE DURATIONS ─────────────────────────────────────
+const SVC_DUR={'Wash & Set':60,'Silk Press':90,'Relaxer':120,'Color & Highlights':150,'Deep Condition':45,'Trim & Dusting':30,'Box Braids':240,'Knotless Braids':270,'Senegalese Twists':240,'Cornrows':90,'TWA Shapeup':60,'Loc Retwist':120,'Loc Starter':180,'Not Sure / Other':60};
+
+// ── DEFAULT CONTENT ───────────────────────────────────────
+const DEFAULT_SERVICES = [
+  {category:'Hair Services', items:[
+    {name:'Wash & Set',desc:'Shampoo, condition & style',time:'~60 min',price:'$45',from:false},
+    {name:'Silk Press',desc:'Smooth, sleek finish',time:'~90 min',price:'$75',from:true},
+    {name:'Relaxer',desc:'Touch-up or new growth',time:'~2 hrs',price:'$85',from:true},
+    {name:'Color & Highlights',desc:'Single process or partial',time:'~2.5 hrs',price:'$95',from:true},
+    {name:'Deep Condition',desc:'Moisture & protein treatment',time:'~45 min',price:'$35',from:false},
+    {name:'Trim & Dusting',desc:'Healthy ends, clean shape',time:'~30 min',price:'$25',from:true},
+  ]},
+  {category:'Braids & Protective Styles', items:[
+    {name:'Box Braids',desc:'Small, medium or large',time:'~4 hrs',price:'$150',from:true},
+    {name:'Knotless Braids',desc:'No-tension installation',time:'~4.5 hrs',price:'$175',from:true},
+    {name:'Senegalese Twists',desc:'Rope-style protective look',time:'~4 hrs',price:'$160',from:true},
+    {name:'Cornrows',desc:'Natural or with extensions',time:'~90 min',price:'$60',from:true},
+    {name:'Loc Retwist',desc:'Palm roll or comb coil',time:'~2 hrs',price:'$65',from:true},
+    {name:'Loc Starter',desc:'New loc installation',time:'~3 hrs',price:'$120',from:true},
+  ]},
+];
+
+const DEFAULT_SPECIALS = [
+  {tag:'Featured Promotion',title:'Summer Glow Package',desc:'Wash & set + deep condition + scalp treatment — everything your hair needs heading into summer.',oldPrice:'$100',newPrice:'$75',endDate:'Jun 30',hero:true},
+  {tag:'✦ Referral',title:'Bring a Friend',desc:'Refer a new client and get $15 off your next visit.',price:'$15 off',date:'Ongoing'},
+  {tag:'✦ Weekly Deal',title:'Tuesday Wash Day',desc:'Every Tuesday — Wash & Set for only $35.',price:'$35',date:'Every Tuesday'},
+  {tag:'✦ Loyalty',title:'10th Visit Free',desc:'Visit 9 times and your 10th wash & set is completely on us.',price:'FREE',date:'Loyalty Program'},
+  {tag:'✦ Bundle',title:'Braids + Deep Condition',desc:'Bundle a deep condition with any braiding service.',price:'Save $20',date:'Available Now'},
+];
+
+const DEFAULT_GALLERY = [
+  {label:'Knotless Braids'},{label:'Silk Press'},{label:'Box Braids'},{label:'Wash & Set'},
+  {label:'Loc Retwist'},{label:'Color & Highlights'},{label:'Cornrows'},{label:'Natural Style'},
+];
+
+// ── CLOCK ──────────────────────────────────────────────────
+function tick(){
+  const n=new Date(),h=n.getHours(),m=n.getMinutes().toString().padStart(2,'0'),ampm=h>=12?'PM':'AM';
+  document.getElementById('clock').textContent=`${(h%12)||12}:${m} ${ampm}`;
+  const days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  document.getElementById('dateline').textContent=`${days[n.getDay()]}, ${months[n.getMonth()]} ${n.getDate()}, ${n.getFullYear()}`;
+}
+setInterval(tick,1000); tick();
+
+// ── WEATHER ────────────────────────────────────────────────
+window._weatherCity = 'Columbus,Ohio';
+const ICON_MAP={'Sunny':'☀️','Clear':'✨','Partly cloudy':'⛅','Cloudy':'☁️','Overcast':'☁️','Mist':'🌫️','Fog':'🌫️','Light rain':'🌦️','Moderate rain':'🌧️','Heavy rain':'⛈️','Patchy rain':'🌦️','Light snow':'🌨️','Moderate snow':'🌨️','Heavy snow':'❄️','Blizzard':'❄️','Thundery':'⛈️','Thunder':'⛈️'};
+
+async function loadWeather(){
+  try{
+    const city=encodeURIComponent(window._weatherCity||'Columbus,Ohio');
+    const r=await fetch(`https://wttr.in/${city}?format=j1`);
+    const d=await r.json();
+    const c=d.current_condition[0];
+    const desc=c.weatherDesc[0].value;
+    const temp=c.temp_F;
+    const icon=Object.entries(ICON_MAP).find(([k])=>desc.toLowerCase().includes(k.toLowerCase()))?.[1]||'🌤️';
+    document.getElementById('weather').textContent=`${icon} ${temp}°F · ${desc}`;
+  }catch(e){document.getElementById('weather').textContent='Columbus, OH'}
+}
+loadWeather();
+setInterval(loadWeather,10*60*1000);
+
+// ── PANELS ─────────────────────────────────────────────────
+const PANEL_IDS=['panel-services','panel-gallery','panel-specials','panel-instagram'];
+const ROTATE=14000;
+let cur=0;
+const dotsEl=document.getElementById('panel-dots');
+PANEL_IDS.forEach((_,i)=>{
+  const d=document.createElement('div');
+  d.className='dot'+(i===0?' active':'');
+  d.onclick=()=>goTo(i); dotsEl.appendChild(d);
+});
+function goTo(idx){
+  document.getElementById(PANEL_IDS[cur]).classList.remove('active');
+  dotsEl.children[cur].classList.remove('active');
+  cur=idx;
+  document.getElementById(PANEL_IDS[cur]).classList.add('active');
+  dotsEl.children[cur].classList.add('active');
+  resetBar();
+}
+function resetBar(){
+  clearTimeout(window._rt);
+  const b=document.getElementById('progress-bar');
+  b.style.transition='none';b.style.width='0%';
+  requestAnimationFrame(()=>{b.style.transition=`width ${ROTATE}ms linear`;b.style.width='100%';});
+  window._rt=setTimeout(()=>goTo((cur+1)%PANEL_IDS.length),ROTATE);
+}
+resetBar();
+
+// ── HELPERS ────────────────────────────────────────────────
+function displayName(n){
+  const p=(n||'').trim().split(' ');
+  return p.length>1?`${p[0]} ${p[1][0]}.`:p[0];
+}
+function calcWait(entries,beforeTs){
+  let m=0;
+  for(const[,e]of entries){
+    if(e.ts>=beforeTs)break;
+    if(e.status==='done')continue;
+    const d=e.serviceDuration||SVC_DUR[e.service]||60;
+    m+=e.status==='in-service'?Math.round(d*.5):d;
+  }
+  return m;
+}
+function fmtWait(m){if(!m)return 'Next!';if(m<60)return`~${m}m`;const h=Math.floor(m/60),r=m%60;return r?`~${h}h${r}m`:`~${h}h`;}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function isBirthday(bd){if(!bd)return false;const t=new Date();const[mo,dy]=bd.split('-').map(Number);return t.getMonth()+1===mo&&t.getDate()===dy;}
+
+// ── QUEUE ──────────────────────────────────────────────────
+window._renderQueue=function(entries){
+  const list=document.getElementById('queue-list');
+  const empty=document.getElementById('q-empty');
+  const visible=entries.filter(([,e])=>e.status!=='done');
+  const waiting=visible.filter(([,e])=>e.status!=='in-service');
+  const inSvc=visible.filter(([,e])=>e.status==='in-service');
+  const appts=visible.filter(([,e])=>e.isAppointment);
+
+  document.getElementById('stat-w').textContent=waiting.length;
+  document.getElementById('stat-s').textContent=inSvc.length;
+  const nxt=waiting.length?calcWait(entries,waiting[0][1].ts):0;
+  document.getElementById('stat-wt').textContent=waiting.length?fmtWait(nxt):'–';
+
+  // Birthday check
+  const hasBday=visible.some(([,e])=>isBirthday(e.birthday));
+  const bdayBanner=document.getElementById('bday-banner');
+  if(hasBday){
+    const bdayClient=visible.find(([,e])=>isBirthday(e.birthday));
+    bdayBanner.textContent=`🎂 Happy Birthday, ${displayName(bdayClient[1].name)}! We have a special treat for you!`;
+    bdayBanner.classList.add('show');
+  } else {
+    bdayBanner.classList.remove('show');
+  }
+
+  list.innerHTML='';
+  if(!visible.length){list.appendChild(empty);empty.style.display='';return;}
+  empty.style.display='none';
+
+  // Appointments first
+  if(appts.length){
+    const lbl=document.createElement('div');
+    lbl.className='lane-label appt-lane';lbl.textContent='📅 Appointments';
+    list.appendChild(lbl);
+  }
+
+  let wIdx=0;
+  visible.forEach(([key,e])=>{
+    const isSvc=e.status==='in-service';
+    const isFirst=!isSvc&&wIdx===0;
+    const isAppt=e.isAppointment;
+    const isBday=isBirthday(e.birthday);
+    if(!isSvc)wIdx++;
+
+    const wait=isSvc?0:calcWait(entries,e.ts);
+    const card=document.createElement('div');
+    card.className=`q-card${isSvc?' in-service':isFirst&&!isAppt?' first':isAppt?' appt':''}${isBday?' bday':''}`;
+
+    const badge=isSvc?`<span class="status-badge bs">In Chair</span>`:e.notified?`<span class="status-badge bn">Notified</span>`:`<span class="status-badge bw">${isFirst?'Next Up':'Waiting'}</span>`;
+    const stylist=e.assignedStylist&&e.assignedStylist!=='Any Available'?`<span class="q-stylist">${esc(e.assignedStylist)}</span>`:`<span class="q-stylist none">—</span>`;
+    const waitLbl=isSvc?`<span class="q-wait ins">In chair</span>`:isFirst?`<span class="q-wait nxt">You're next!</span>`:`<span class="q-wait">${fmtWait(wait)} wait</span>`;
+
+    card.innerHTML=`
+      <div class="q-top">
+        <div class="q-num">${isSvc?'✦':isAppt?'📅':wIdx}</div>
+        <div class="q-info">
+          <div class="q-name-row"><div class="q-name">${esc(displayName(e.name))}</div>${badge}</div>
+          <div class="q-service">${esc(e.service||'Service TBD')}</div>
+          <div class="q-meta">${stylist}${waitLbl}</div>
+        </div>
+      </div>
+      <div class="q-actions">
+        ${!isSvc?`<button class="q-btn q-btn-svc" onclick="window._fbStatus('${key}','in-service')">▶ In Service</button>`:''}
+        <button class="q-btn q-btn-done" onclick="window._fbDone('${key}')">✓ Done</button>
+      </div>`;
+    list.appendChild(card);
+  });
+};
+
+// ── SERVICES RENDER ────────────────────────────────────────
+function renderServicesDefault(){
+  const grid=document.getElementById('svc-grid');
+  grid.innerHTML='';
+  DEFAULT_SERVICES.forEach(cat=>{
+    const cl=document.createElement('div');cl.className='svc-cat';cl.textContent=`✦ ${cat.category}`;
+    grid.appendChild(cl);
+    cat.items.forEach(s=>{
+      const c=document.createElement('div');c.className='svc-card';
+      c.innerHTML=`<div><div class="svc-name">${esc(s.name)}</div><div class="svc-desc">${esc(s.desc)}</div><div class="svc-time">${esc(s.time)}</div></div><div class="svc-price${s.from?' from':''}">${esc(s.price)}</div>`;
+      grid.appendChild(c);
+    });
+  });
+  const note=document.createElement('div');note.className='svc-note';
+  note.textContent='✦ Ask your stylist for a full quote · Add-ons from $20';
+  grid.appendChild(note);
+}
+window._renderServices=function(services){
+  const grid=document.getElementById('svc-grid');
+  grid.innerHTML='';
+  const cats=[...new Set(services.map(s=>s.category))];
+  cats.forEach(cat=>{
+    const cl=document.createElement('div');cl.className='svc-cat';cl.textContent=`✦ ${cat}`;
+    grid.appendChild(cl);
+    services.filter(s=>s.category===cat).forEach(s=>{
+      const c=document.createElement('div');c.className='svc-card';
+      const price=s.priceFrom?`<div class="svc-price from">$${s.price}</div>`:`<div class="svc-price">$${s.price}</div>`;
+      c.innerHTML=`<div><div class="svc-name">${esc(s.name)}</div><div class="svc-desc">${esc(s.desc||'')}</div><div class="svc-time">~${s.duration} min</div></div>${price}`;
+      grid.appendChild(c);
+    });
+  });
+};
+renderServicesDefault();
+
+// ── SPECIALS RENDER ────────────────────────────────────────
+function renderSpecialsDefault(){
+  const grid=document.getElementById('specials-grid');
+  grid.innerHTML='';
+  const hero=DEFAULT_SPECIALS[0];
+  grid.innerHTML=`
+    <div class="special-hero">
+      <div class="sh-date"><div class="sh-date-label">ENDS</div><div class="sh-date-val">${esc(hero.endDate)}</div></div>
+      <div class="sh-tag">${esc(hero.tag)}</div>
+      <h3>${esc(hero.title)}</h3><p>${esc(hero.desc)}</p>
+      <div class="sh-price-row"><span class="sh-old">${esc(hero.oldPrice)}</span><span class="sh-new">${esc(hero.newPrice)}</span></div>
+    </div>`;
+  DEFAULT_SPECIALS.slice(1).forEach(s=>{
+    const c=document.createElement('div');c.className='spec-card';
+    c.innerHTML=`<div class="sc-tag">${esc(s.tag)}</div><h4>${esc(s.title)}</h4><p>${esc(s.desc)}</p><div class="sc-price">${esc(s.price)}</div><div class="sc-date">${esc(s.date)}</div>`;
+    grid.appendChild(c);
+  });
+}
+window._renderSpecials=function(specials){
+  const grid=document.getElementById('specials-grid');
+  grid.innerHTML='';
+  const hero=specials[0];
+  if(!hero)return;
+  grid.innerHTML=`
+    <div class="special-hero">
+      ${hero.endDate?`<div class="sh-date"><div class="sh-date-label">ENDS</div><div class="sh-date-val">${esc(hero.endDate)}</div></div>`:''}
+      <div class="sh-tag">${esc(hero.tag||'Featured')}</div>
+      <h3>${esc(hero.title)}</h3><p>${esc(hero.desc||'')}</p>
+      <div class="sh-price-row">${hero.oldPrice?`<span class="sh-old">${esc(hero.oldPrice)}</span>`:''}
+      <span class="sh-new">${esc(hero.newPrice||hero.price||'')}</span></div>
+    </div>`;
+  specials.slice(1).forEach(s=>{
+    const c=document.createElement('div');c.className='spec-card';
+    c.innerHTML=`<div class="sc-tag">${esc(s.tag||'')}</div><h4>${esc(s.title)}</h4><p>${esc(s.desc||'')}</p><div class="sc-price">${esc(s.newPrice||s.price||'')}</div><div class="sc-date">${esc(s.endDate||s.date||'')}</div>`;
+    grid.appendChild(c);
+  });
+};
+renderSpecialsDefault();
+
+// ── GALLERY RENDER ─────────────────────────────────────────
+function buildGallery(photos){
+  const grid=document.getElementById('photo-grid');
+  grid.innerHTML='';
+  photos.forEach(p=>{
+    const item=document.createElement('div');item.className='photo-item';
+    item.innerHTML=p.url||p.src
+      ?`<img src="${esc(p.url||p.src)}" alt="${esc(p.label||'')}"/><div class="photo-label">${esc(p.label||'')}</div>`
+      :`<div class="ph-placeholder"><div class="ph-icon">✂️</div><div class="ph-text">${esc(p.label||'Add photo')}</div></div><div class="photo-label">${esc(p.label||'')}</div>`;
+    grid.appendChild(item);
+  });
+}
+window._renderGallery=buildGallery;
+buildGallery(DEFAULT_GALLERY);
+
+// ── INSTAGRAM ──────────────────────────────────────────────
+window._setInstagram=function(src){
+  if(!src||src.includes('PASTE_'))return;
+  document.getElementById('ig-placeholder').style.display='none';
+  const f=document.getElementById('ig-frame');
+  f.src=src; f.style.display='block';
+};
+// Check if already configured
+(()=>{const f=document.getElementById('ig-frame');if(f.src&&!f.src.includes('PASTE_'))window._setInstagram(f.src);})();
+</script>
+</body>
+</html>

@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>GMB Beauty – Check In</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Lato:wght@300;400;700&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+
+  <script type="module">
+    import { initializeApp }   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getDatabase, ref, push, get, set, onValue, remove }
+      from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey:"AIzaSyDujypyhEgmAZalHwe21gwCCPnL7fkOrp4",
+      authDomain:"gbm-beauty-platform.firebaseapp.com",
+      databaseURL:"https://gbm-beauty-platform-default-rtdb.firebaseio.com",
+      projectId:"gbm-beauty-platform",
+      storageBucket:"gbm-beauty-platform.firebasestorage.app",
+      messagingSenderId:"568438954424",
+      appId:"1:568438954424:web:d7074f32727638784b174d"
+    };
+    const app=initializeApp(firebaseConfig);
+    const db=getDatabase(app);
+
+    // Live queue
+    onValue(ref(db,'waitlist'),snap=>{
+      const data=snap.val()||{};
+      window._liveQueue=Object.entries(data).sort((a,b)=>a[1].ts-b[1].ts);
+      window._renderPreview(window._liveQueue);
+    });
+
+    // Load settings (review URL, stylists)
+    onValue(ref(db,'config/settings'),snap=>{
+      const s=snap.val()||{};
+      if(s.reviewUrl) window._reviewUrl=s.reviewUrl;
+    });
+    onValue(ref(db,'config/stylists'),snap=>{
+      const s=snap.val();
+      if(s) window._renderStylistOptions(Array.isArray(s)?s:Object.values(s));
+    });
+
+    window._fbLookup=async phone=>(await get(ref(db,`clients/${phone}`))).val();
+
+    window._fbCheckIn=async payload=>{
+      await push(ref(db,'waitlist'),payload);
+      if(payload.phone){
+        const prev=((await get(ref(db,`clients/${payload.phone}`))).val())||{};
+        await set(ref(db,`clients/${payload.phone}`),{
+          name:payload.name, lastService:payload.service,
+          birthday:payload.birthday||prev.birthday||null,
+          visitCount:(prev.visitCount||0)+1, lastVisit:Date.now()
+        });
+      }
+    };
+
+    window._fbLeave=async ts=>{
+      const snap=await get(ref(db,'waitlist'));
+      const data=snap.val()||{};
+      for(const[key,val]of Object.entries(data)){
+        if(val.ts===ts){await remove(ref(db,`waitlist/${key}`));break;}
+      }
+    };
+  </script>
+
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#0b1a12;--card:#0f2418;--card2:rgba(255,255,255,.04);
+      --border:rgba(201,168,76,.25);--gold:#c9a84c;--gold-lt:#e2c97a;
+      --green:#1e5c38;--green-lt:#2a7a4d;--white:#f5f0e8;--muted:rgba(245,240,232,.5);
+      --red:#e05c5c;--blue:#7ab8ff;
+    }
+    html,body{width:100%;height:100%;background:var(--bg);color:var(--white);font-family:'Lato',sans-serif;overflow:hidden;-webkit-font-smoothing:antialiased}
+    body{position:fixed;width:100%}
+    #app{height:100vh;display:flex;flex-direction:column}
+
+    header{background:linear-gradient(90deg,#081410,#0f2418,#081410);border-bottom:1px solid var(--border);padding:14px 22px;display:flex;align-items:center;gap:12px;flex-shrink:0}
+    .logo-mark{width:44px;height:44px;background:linear-gradient(135deg,var(--green),var(--green-lt));border:1px solid var(--gold);border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:var(--gold);flex-shrink:0}
+    .brand-name{font-family:'Playfair Display',serif;font-size:20px;font-weight:700;letter-spacing:1px}
+    .brand-name span{color:var(--gold)}
+    .brand-sub{font-size:11px;font-weight:300;color:var(--muted);margin-top:1px}
+    header .hclock{margin-left:auto;font-size:19px;font-weight:700;color:var(--gold);letter-spacing:1px}
+
+    #scroll{flex:1;overflow-y:auto;padding:18px 18px 14px}
+    #scroll::-webkit-scrollbar{display:none}
+
+    /* Steps */
+    .steps{display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:18px}
+    .step-dot{width:8px;height:8px;border-radius:50%;background:var(--border);transition:all .3s}
+    .step-dot.active{background:var(--gold);width:24px;border-radius:4px}
+    .step-dot.done{background:var(--green-lt)}
+
+    /* Cards */
+    .card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:22px 18px;margin-bottom:14px}
+    .card-title{font-family:'Playfair Display',serif;font-size:20px;font-weight:700;text-align:center;margin-bottom:3px}
+    .card-title span{color:var(--gold)}
+    .card-sub{text-align:center;font-size:12px;color:var(--muted);margin-bottom:18px;font-style:italic}
+
+    /* Fields */
+    .field{margin-bottom:14px}
+    .field label{display:block;font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+    .field-note{font-size:10px;color:var(--muted);font-weight:300;text-transform:none;letter-spacing:0}
+    .field-row{display:flex;gap:8px;align-items:flex-end}
+    .field input,.field select,.field textarea{width:100%;padding:14px 15px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:13px;color:var(--white);font-size:16px;font-family:'Lato',sans-serif;outline:none;transition:border-color .2s;-webkit-appearance:none}
+    .field textarea{resize:none;height:72px;font-size:13px}
+    .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--gold)}
+    .field input::placeholder{color:rgba(245,240,232,.22)}
+    .field select option{background:#0f2418;color:var(--white)}
+
+    /* Birthday row */
+    .bday-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+    /* Return banner */
+    #return-banner{display:none;background:rgba(201,168,76,.1);border:1px solid rgba(201,168,76,.35);border-radius:12px;padding:11px 14px;margin-bottom:14px;align-items:center;gap:10px}
+    #return-banner.show{display:flex}
+    .rb-icon{font-size:20px;flex-shrink:0}
+    .rb-text{font-size:12px;color:var(--gold-lt);line-height:1.5}
+
+    /* Birthday perk banner */
+    #bday-perk{display:none;background:linear-gradient(90deg,rgba(201,168,76,.15),rgba(201,168,76,.05));border:1px solid rgba(201,168,76,.4);border-radius:12px;padding:11px 14px;margin-bottom:14px;text-align:center;color:var(--gold-lt);font-size:13px;font-weight:700}
+    #bday-perk.show{display:block}
+
+    .lookup-btn{padding:14px 16px;background:var(--green);border:1px solid var(--gold);border-radius:13px;color:var(--gold-lt);font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap;transition:all .2s;flex-shrink:0;-webkit-tap-highlight-color:transparent}
+    .lookup-btn:active{opacity:.8;transform:scale(.97)}
+
+    .err{color:var(--red);font-size:11px;margin-top:5px;display:none}
+    .err.show{display:block}
+
+    .btn-primary{width:100%;padding:17px;background:linear-gradient(135deg,var(--green),var(--green-lt));border:1px solid var(--gold);border-radius:15px;color:var(--gold-lt);font-family:'Playfair Display',serif;font-size:18px;font-weight:700;cursor:pointer;transition:all .2s;-webkit-tap-highlight-color:transparent}
+    .btn-primary:active{transform:scale(.98);opacity:.85}
+    .btn-primary:disabled{opacity:.5;cursor:not-allowed;transform:none}
+    .btn-secondary{width:100%;padding:13px;background:transparent;border:1px solid var(--border);border-radius:13px;color:var(--muted);font-size:14px;font-weight:700;cursor:pointer;transition:all .2s;margin-top:9px;-webkit-tap-highlight-color:transparent}
+    .btn-secondary:active{border-color:var(--gold);color:var(--white)}
+
+    /* Wait preview */
+    #wait-preview{display:none;background:rgba(201,168,76,.07);border:1px solid rgba(201,168,76,.25);border-radius:12px;padding:12px 14px;margin-bottom:14px;text-align:center}
+    #wait-preview.show{display:block}
+    .wl{font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:3px}
+    .wv{font-family:'Playfair Display',serif;font-size:26px;font-weight:700;color:var(--gold)}
+    .ws{font-size:11px;color:var(--muted);margin-top:3px}
+
+    /* Confirm */
+    #step-confirm{display:none}
+    #step-confirm.show{display:block}
+    .confirm-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border)}
+    .confirm-row:last-of-type{border:none}
+    .confirm-label{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted)}
+    .confirm-val{font-size:14px;font-weight:700;color:var(--white);text-align:right;max-width:58%}
+
+    /* Success */
+    #success-screen{display:none}
+    #success-screen.show{display:block}
+    .success-card{background:var(--card);border:1px solid var(--gold);border-radius:20px;padding:28px 18px;text-align:center;margin-bottom:14px;animation:fadeIn .4s ease}
+    @keyframes fadeIn{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}
+    .success-icon{font-size:48px;margin-bottom:12px}
+    #success-screen h2{font-family:'Playfair Display',serif;font-size:24px;color:var(--gold);margin-bottom:7px}
+    #success-screen p{font-size:13px;color:var(--muted);line-height:1.6}
+    .pos-badge{display:inline-flex;align-items:center;justify-content:center;width:64px;height:64px;margin:14px auto 3px;background:var(--green);border:2px solid var(--gold);border-radius:50%;font-family:'Playfair Display',serif;font-size:28px;font-weight:700;color:var(--gold)}
+    .pos-label{font-size:11px;color:var(--muted);margin-bottom:12px}
+    .wait-chip{display:inline-block;background:rgba(201,168,76,.12);border:1px solid rgba(201,168,76,.3);border-radius:20px;padding:5px 14px;font-size:12px;color:var(--gold-lt)}
+    .leave-btn{width:100%;padding:13px;margin-top:11px;background:rgba(224,92,92,.1);border:1px solid rgba(224,92,92,.3);border-radius:13px;color:#e05c5c;font-size:14px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:all .2s}
+    .leave-btn:active{background:rgba(224,92,92,.2)}
+
+    /* Review card */
+    .review-card{background:rgba(201,168,76,.07);border:1px solid rgba(201,168,76,.3);border-radius:16px;padding:20px 16px;text-align:center;margin-bottom:14px}
+    .review-card h3{font-family:'Playfair Display',serif;font-size:18px;color:var(--gold);margin-bottom:6px}
+    .review-card p{font-size:12px;color:var(--muted);margin-bottom:14px}
+    #review-qr{display:flex;justify-content:center;margin-bottom:10px}
+    #review-qr canvas,#review-qr img{border-radius:10px;border:3px solid var(--gold)}
+
+    /* Queue preview */
+    .queue-card{background:var(--card2);border:1px solid var(--border);border-radius:16px;padding:16px 14px}
+    .qc-head{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+    .qc-icon{width:32px;height:32px;background:var(--green);border:1px solid var(--gold);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px}
+    .qc-title{font-family:'Playfair Display',serif;font-size:16px;font-weight:700}
+    .qc-title span{color:var(--gold)}
+    #preview-list{display:flex;flex-direction:column;gap:7px}
+    .pv-row{display:flex;align-items:center;gap:9px;padding:8px 11px;border-radius:9px;background:rgba(255,255,255,.03);border:1px solid var(--border)}
+    .pv-num{width:24px;height:24px;flex-shrink:0;background:var(--green);border:1px solid var(--gold);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--gold);font-family:'Playfair Display',serif}
+    .pv-name{font-size:13px;font-weight:700;flex:1}
+    .pv-svc{font-size:10px;color:var(--muted)}
+    .pv-wait{font-size:10px;color:var(--gold);white-space:nowrap}
+    .pv-empty{text-align:center;font-size:12px;color:var(--muted);padding:12px}
+
+    footer{background:linear-gradient(90deg,#081410,#0f2418,#081410);border-top:1px solid var(--border);padding:8px 22px;text-align:center;font-size:11px;color:var(--muted);flex-shrink:0}
+    footer span{color:var(--gold)}
+  </style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="logo-mark">G</div>
+    <div><div class="brand-name">GMB <span>Beauty</span></div><div class="brand-sub">Walk-In Check-In</div></div>
+    <div class="hclock" id="clock">–:– –M</div>
+  </header>
+
+  <div id="scroll">
+    <div class="steps">
+      <div class="step-dot active" id="dot-0"></div>
+      <div class="step-dot" id="dot-1"></div>
+      <div class="step-dot" id="dot-2"></div>
+    </div>
+
+    <!-- STEP 1: FORM -->
+    <div id="step-form">
+      <div class="card">
+        <div class="card-title">Welcome to <span>GMB Beauty</span></div>
+        <div class="card-sub">Fill in your details to join the waiting list</div>
+
+        <div class="field">
+          <label>Phone Number <span class="field-note">(returning clients — we'll find your info)</span></label>
+          <div class="field-row">
+            <input type="tel" id="inp-phone" placeholder="(614) 000-0000" autocomplete="tel" inputmode="tel" oninput="formatPhone(this)" onblur="lookupClient()"/>
+            <button class="lookup-btn" onclick="lookupClient()">Look up</button>
+          </div>
+        </div>
+
+        <div id="return-banner"><div class="rb-icon">✨</div><div class="rb-text"><strong id="rb-name">Welcome back!</strong><br/>Details pre-filled from your last visit.</div></div>
+        <div id="bday-perk">🎂 Happy Birthday! Ask about your birthday special today!</div>
+
+        <div class="field">
+          <label>Your Name</label>
+          <input type="text" id="inp-name" placeholder="First & Last Name" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false"/>
+          <div class="err" id="err-name">Please enter your name.</div>
+        </div>
+
+        <div class="field">
+          <label>Service</label>
+          <select id="inp-service">
+            <option value="">– What are you here for? –</option>
+            <optgroup label="Hair Services">
+              <option>Wash &amp; Set</option><option>Silk Press</option><option>Relaxer</option>
+              <option>Color &amp; Highlights</option><option>Deep Condition</option><option>Trim &amp; Dusting</option>
+            </optgroup>
+            <optgroup label="Braids &amp; Protective Styles">
+              <option>Box Braids</option><option>Knotless Braids</option>
+              <option>Senegalese Twists</option><option>Cornrows</option>
+            </optgroup>
+            <optgroup label="Natural Hair">
+              <option>TWA Shapeup</option><option>Loc Retwist</option><option>Loc Starter</option>
+            </optgroup>
+            <option>Not Sure / Other</option>
+          </select>
+          <div class="err" id="err-service">Please select a service.</div>
+        </div>
+
+        <div class="field">
+          <label>Preferred Stylist</label>
+          <select id="inp-stylist">
+            <option value="Any Available">Any Available</option>
+            <option>Stylist 1</option><option>Stylist 2</option><option>Stylist 3</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Birthday <span class="field-note">(optional — for birthday specials)</span></label>
+          <div class="bday-row">
+            <select id="inp-bday-month">
+              <option value="">Month</option>
+              <option value="01">January</option><option value="02">February</option>
+              <option value="03">March</option><option value="04">April</option>
+              <option value="05">May</option><option value="06">June</option>
+              <option value="07">July</option><option value="08">August</option>
+              <option value="09">September</option><option value="10">October</option>
+              <option value="11">November</option><option value="12">December</option>
+            </select>
+            <select id="inp-bday-day">
+              <option value="">Day</option>
+              ${Array.from({length:31},(_,i)=>`<option value="${String(i+1).padStart(2,'0')}">${i+1}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Notes for your stylist <span class="field-note">(optional)</span></label>
+          <textarea id="inp-notes" placeholder="Reference photo description, allergies, last service date…"></textarea>
+        </div>
+
+        <button class="btn-primary" onclick="goToConfirm()">Review &amp; Confirm ✦</button>
+      </div>
+    </div>
+
+    <!-- STEP 2: CONFIRM -->
+    <div id="step-confirm">
+      <div class="card">
+        <div class="card-title"><span>Confirm</span> Your Details</div>
+        <div class="card-sub">Make sure everything looks right before joining</div>
+        <div id="wait-preview">
+          <div class="wl">Estimated Wait Time</div>
+          <div class="wv" id="wait-val">–</div>
+          <div class="ws" id="wait-sub">based on current queue</div>
+        </div>
+        <div class="confirm-row"><span class="confirm-label">Name</span><span class="confirm-val" id="cf-name">–</span></div>
+        <div class="confirm-row"><span class="confirm-label">Service</span><span class="confirm-val" id="cf-service">–</span></div>
+        <div class="confirm-row"><span class="confirm-label">Stylist</span><span class="confirm-val" id="cf-stylist">–</span></div>
+        <div class="confirm-row" id="cf-bday-row" style="display:none"><span class="confirm-label">Birthday</span><span class="confirm-val" id="cf-bday">–</span></div>
+        <div class="confirm-row" id="cf-notes-row" style="display:none"><span class="confirm-label">Notes</span><span class="confirm-val" id="cf-notes">–</span></div>
+        <button class="btn-primary" id="confirm-btn" onclick="confirmCheckIn()" style="margin-top:18px">Join the Queue ✦</button>
+        <button class="btn-secondary" onclick="goToForm()">← Edit Details</button>
+      </div>
+    </div>
+
+    <!-- STEP 3: SUCCESS -->
+    <div id="success-screen">
+      <div class="success-card">
+        <div class="success-icon">✨</div>
+        <h2>You're in, <span id="success-name">–</span>!</h2>
+        <p>Please have a seat — your stylist will call your name shortly.</p>
+        <div class="pos-badge" id="pos-badge">–</div>
+        <div class="pos-label">in the queue</div>
+        <div class="wait-chip" id="wait-chip">Calculating…</div>
+        <p style="margin-top:8px;font-size:11px;color:var(--muted)">Watch the TV screen for your name and position.</p>
+        <button class="leave-btn" onclick="leaveQueue()">✕ &nbsp; I'm leaving — remove me from the queue</button>
+      </div>
+
+      <!-- Google Review prompt -->
+      <div class="review-card" id="review-card">
+        <h3>Enjoying your visit?</h3>
+        <p>Scan below to leave us a Google review — it means the world to us! ❤️</p>
+        <div id="review-qr"></div>
+        <div style="font-size:11px;color:var(--muted)">Takes less than 60 seconds</div>
+      </div>
+
+      <button class="btn-secondary" onclick="resetAll()" style="margin-bottom:14px">← Check In Someone Else</button>
+    </div>
+
+    <!-- LIVE QUEUE PREVIEW -->
+    <div class="queue-card">
+      <div class="qc-head">
+        <div class="qc-icon">💅</div>
+        <div class="qc-title">Current <span>Queue</span></div>
+      </div>
+      <div id="preview-list"><div class="pv-empty">Queue is empty — be the first!</div></div>
+    </div>
+  </div>
+  <footer>Powered by <span>GMB Beauty</span> · Walk-ins Always Welcome · Columbus, OH</footer>
+</div>
+
+<script>
+const SVC_DUR={'Wash & Set':60,'Silk Press':90,'Relaxer':120,'Color & Highlights':150,'Deep Condition':45,'Trim & Dusting':30,'Box Braids':240,'Knotless Braids':270,'Senegalese Twists':240,'Cornrows':90,'TWA Shapeup':60,'Loc Retwist':120,'Loc Starter':180,'Not Sure / Other':60};
+const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+let checkedInTs=null;
+window._liveQueue=[];
+window._reviewUrl='https://g.page/r/YOUR_GOOGLE_REVIEW_LINK'; // ← Set in Admin panel
+
+// Clock
+function tick(){const n=new Date(),h=n.getHours(),m=n.getMinutes().toString().padStart(2,'0'),ampm=h>=12?'PM':'AM';document.getElementById('clock').textContent=`${(h%12)||12}:${m} ${ampm}`;}
+setInterval(tick,1000);tick();
+
+// Phone
+function formatPhone(el){let v=el.value.replace(/\D/g,'');if(v.length>10)v=v.slice(0,10);if(v.length>6)v=`(${v.slice(0,3)}) ${v.slice(3,6)}-${v.slice(6)}`;else if(v.length>3)v=`(${v.slice(0,3)}) ${v.slice(3)}`;el.value=v;}
+function normPhone(p){return p.replace(/\D/g,'');}
+
+// Stylist options from Firebase
+window._renderStylistOptions=function(stylists){
+  const sel=document.getElementById('inp-stylist');
+  const cur=sel.value;
+  sel.innerHTML='<option value="Any Available">Any Available</option>';
+  (stylists||[]).forEach(s=>{
+    const o=document.createElement('option');
+    o.value=s.name||s;o.textContent=s.name||s;
+    sel.appendChild(o);
+  });
+  if(cur)sel.value=cur;
+};
+
+// Returning client lookup
+async function lookupClient(){
+  const phone=normPhone(document.getElementById('inp-phone').value);
+  if(phone.length<10)return;
+  try{
+    const client=await window._fbLookup(phone);
+    if(client){
+      document.getElementById('inp-name').value=client.name||'';
+      document.getElementById('inp-service').value=client.lastService||'';
+      if(client.birthday){
+        const[mo,dy]=client.birthday.split('-');
+        document.getElementById('inp-bday-month').value=mo;
+        document.getElementById('inp-bday-day').value=dy;
+        // Birthday check
+        const today=new Date();
+        if(today.getMonth()+1===parseInt(mo)&&today.getDate()===parseInt(dy)){
+          document.getElementById('bday-perk').classList.add('show');
+        }
+      }
+      document.getElementById('rb-name').textContent=`Welcome back, ${(client.name||'').split(' ')[0]}! (${client.visitCount||1} visit${(client.visitCount||1)!==1?'s':''})`;
+      document.getElementById('return-banner').classList.add('show');
+    }
+  }catch(e){}
+}
+
+// Wait calc
+function calcMyWait(svc){
+  let m=0;
+  for(const[,e]of(window._liveQueue||[])){
+    if(e.status==='done')continue;
+    const d=e.serviceDuration||SVC_DUR[e.service]||60;
+    m+=e.status==='in-service'?Math.round(d*.5):d;
+  }
+  return m;
+}
+function fmtWait(m){if(!m)return "You're next!";if(m<60)return`~${m} minutes`;const h=Math.floor(m/60),r=m%60;return r?`~${h} hr ${r} min`:`~${h} hour${h>1?'s':''}`;}
+
+// Step management
+function setStep(n){
+  document.getElementById('step-form').style.display=n===0?'block':'none';
+  document.getElementById('step-confirm').style.display=n===1?'block':'none';
+  const ss=document.getElementById('success-screen');
+  n===2?ss.classList.add('show'):ss.classList.remove('show');
+  [0,1,2].forEach(i=>{
+    document.getElementById(`dot-${i}`).classList.toggle('active',i===n);
+    document.getElementById(`dot-${i}`).classList.toggle('done',i<n);
+  });
+  document.getElementById('scroll').scrollTo({top:0,behavior:'smooth'});
+}
+
+function goToConfirm(){
+  const name=document.getElementById('inp-name').value.trim();
+  const service=document.getElementById('inp-service').value;
+  let valid=true;
+  if(!name){document.getElementById('err-name').classList.add('show');valid=false;}
+  else document.getElementById('err-name').classList.remove('show');
+  if(!service){document.getElementById('err-service').classList.add('show');valid=false;}
+  else document.getElementById('err-service').classList.remove('show');
+  if(!valid)return;
+
+  const stylist=document.getElementById('inp-stylist').value;
+  const notes=document.getElementById('inp-notes').value.trim();
+  const bdayM=document.getElementById('inp-bday-month').value;
+  const bdayD=document.getElementById('inp-bday-day').value;
+  const bday=bdayM&&bdayD?`${bdayM}-${bdayD}`:null;
+
+  document.getElementById('cf-name').textContent=name;
+  document.getElementById('cf-service').textContent=service;
+  document.getElementById('cf-stylist').textContent=stylist;
+  if(bday){document.getElementById('cf-bday-row').style.display='';document.getElementById('cf-bday').textContent=`${MONTHS[parseInt(bdayM)-1]} ${parseInt(bdayD)}`;}
+  else document.getElementById('cf-bday-row').style.display='none';
+  if(notes){document.getElementById('cf-notes-row').style.display='';document.getElementById('cf-notes').textContent=notes;}
+  else document.getElementById('cf-notes-row').style.display='none';
+
+  const wait=calcMyWait(service);
+  const qLen=(window._liveQueue||[]).filter(([,e])=>e.status!=='done').length;
+  document.getElementById('wait-val').textContent=fmtWait(wait);
+  document.getElementById('wait-sub').textContent=qLen?`${qLen} person${qLen!==1?'s':''} ahead of you`:'No one is ahead of you right now!';
+  document.getElementById('wait-preview').classList.add('show');
+  setStep(1);
+}
+
+function goToForm(){setStep(0);}
+
+async function confirmCheckIn(){
+  const btn=document.getElementById('confirm-btn');
+  btn.disabled=true;btn.textContent='Checking in…';
+  const name=document.getElementById('inp-name').value.trim();
+  const service=document.getElementById('inp-service').value;
+  const stylist=document.getElementById('inp-stylist').value;
+  const notes=document.getElementById('inp-notes').value.trim();
+  const phone=normPhone(document.getElementById('inp-phone').value);
+  const bdayM=document.getElementById('inp-bday-month').value;
+  const bdayD=document.getElementById('inp-bday-day').value;
+  const birthday=bdayM&&bdayD?`${bdayM}-${bdayD}`:null;
+  const now=new Date(),h=now.getHours(),m=now.getMinutes().toString().padStart(2,'0'),ampm=h>=12?'PM':'AM';
+  const ts=Date.now();
+
+  try{
+    if(window._fbCheckIn){
+      await window._fbCheckIn({name,service,phone:phone||null,serviceDuration:SVC_DUR[service]||60,stylistPref:stylist,notes:notes||null,birthday,timeStr:`${(h%12)||12}:${m} ${ampm}`,ts,status:'waiting',notified:false,autoNotify:true});
+    }
+    checkedInTs=ts;
+    const pos=(window._liveQueue||[]).filter(([,e])=>e.status!=='done').length+1;
+    document.getElementById('success-name').textContent=name.split(' ')[0];
+    document.getElementById('pos-badge').textContent=pos;
+    document.getElementById('wait-chip').textContent=`Estimated wait: ${fmtWait(calcMyWait(service))}`;
+    buildReviewQR();
+    setStep(2);
+  }catch(e){
+    alert('Could not check in. Please ask staff for help.');
+    btn.disabled=false;btn.textContent='Join the Queue ✦';
+  }
+}
+
+function buildReviewQR(){
+  const container=document.getElementById('review-qr');
+  container.innerHTML='';
+  const url=window._reviewUrl||'https://g.page/r/YOUR_GOOGLE_REVIEW_LINK';
+  if(url.includes('YOUR_GOOGLE'))return; // skip if not configured
+  try{
+    const qr=qrcode(0,'M');
+    qr.addData(url);qr.make();
+    const img=document.createElement('img');
+    img.src=qr.createDataURL(5,4);
+    img.style.cssText='width:140px;height:140px;border-radius:10px;border:3px solid var(--gold)';
+    container.appendChild(img);
+    document.getElementById('review-card').style.display='';
+  }catch(e){document.getElementById('review-card').style.display='none';}
+}
+
+async function leaveQueue(){
+  if(!checkedInTs)return;
+  if(confirm('Remove yourself from the queue?')){
+    try{await window._fbLeave(checkedInTs);}catch(e){}
+    checkedInTs=null;resetAll();
+  }
+}
+
+function resetAll(){
+  checkedInTs=null;
+  ['inp-phone','inp-name','inp-notes'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('inp-service').value='';
+  document.getElementById('inp-stylist').value='Any Available';
+  document.getElementById('inp-bday-month').value='';
+  document.getElementById('inp-bday-day').value='';
+  document.getElementById('return-banner').classList.remove('show');
+  document.getElementById('bday-perk').classList.remove('show');
+  document.getElementById('wait-preview').classList.remove('show');
+  document.getElementById('confirm-btn').disabled=false;
+  document.getElementById('confirm-btn').textContent='Join the Queue ✦';
+  setStep(0);
+}
+
+// Queue preview
+window._renderPreview=function(entries){
+  const list=document.getElementById('preview-list');
+  list.innerHTML='';
+  const visible=entries.filter(([,e])=>e.status!=='done');
+  if(!visible.length){list.innerHTML='<div class="pv-empty">Queue is empty — be the first!</div>';return;}
+  visible.forEach(([,e],i)=>{
+    const isS=e.status==='in-service';
+    const row=document.createElement('div');row.className='pv-row';
+    row.innerHTML=`<div class="pv-num">${isS?'✦':i+1}</div><div style="flex:1"><div class="pv-name">${esc(e.name.split(' ')[0])} ${(e.name.split(' ')[1]||'')[0]||''}.</div><div class="pv-svc">${esc(e.service||'Service TBD')}</div></div><div class="pv-wait">${isS?'In Chair':'Waiting'}</div>`;
+    list.appendChild(row);
+  });
+  if(checkedInTs){
+    const myIdx=visible.findIndex(([,e])=>e.ts===checkedInTs);
+    if(myIdx>=0)document.getElementById('pos-badge').textContent=myIdx+1;
+  }
+};
+
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+setStep(0);
+</script>
+</body>
+</html>

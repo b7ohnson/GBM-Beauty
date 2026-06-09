@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>GMB Beauty – Admin</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700&family=Lato:wght@300;400;700&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+
+  <script type="module">
+    try {
+      const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
+      const { getDatabase, ref, set, get, remove, onValue } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js");
+
+      const firebaseConfig = {
+        apiKey:"AIzaSyDujypyhEgmAZalHwe21gwCCPnL7fkOrp4",
+        authDomain:"gbm-beauty-platform.firebaseapp.com",
+        databaseURL:"https://gbm-beauty-platform-default-rtdb.firebaseio.com",
+        projectId:"gbm-beauty-platform",
+        storageBucket:"gbm-beauty-platform.firebasestorage.app",
+        messagingSenderId:"568438954424",
+        appId:"1:568438954424:web:d7074f32727638784b174d"
+      };
+
+      if(firebaseConfig.databaseURL.includes('PASTE')){
+        console.warn('GMB Admin: Firebase config not set — running in offline mode.');
+      } else {
+        const app=initializeApp(firebaseConfig);
+        const db=getDatabase(app);
+
+        window._fbSet =(path,val)=>set(ref(db,path),val);
+        window._fbGet =(path)=>get(ref(db,path)).then(s=>s.val());
+        window._fbDel =(path)=>remove(ref(db,path));
+        window._fbWatch=(path,cb)=>onValue(ref(db,path),snap=>cb(snap.val()));
+
+        window._loadConfig=async function(){
+          const config=await window._fbGet('config')||{};
+          window._cfg=config;
+          window._renderServices(config.services||{});
+          window._renderSpecials(config.specials||{});
+          window._renderGallery(config.photos||[]);
+          window._loadSettings(config.settings||{});
+          window._loadStylists(config.stylists||[]);
+        };
+
+        window._loadAnalytics=async function(){
+          const data=await window._fbGet('analytics/daily')||{};
+          window._renderAnalytics(data);
+        };
+      }
+    } catch(err) {
+      console.warn('GMB Admin: Firebase failed to load —', err.message);
+    }
+  </script>
+
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#080f0b;--card:#0f2418;--card2:rgba(255,255,255,.04);
+      --border:rgba(201,168,76,.22);--gold:#c9a84c;--gold-lt:#e2c97a;
+      --green:#1e5c38;--green-lt:#2a7a4d;--white:#f5f0e8;--muted:rgba(245,240,232,.5);
+      --red:#e05c5c;--active:#5ecf8a;--blue:#7ab8ff;
+    }
+    html,body{width:100%;min-height:100vh;background:var(--bg);color:var(--white);font-family:'Lato',sans-serif;-webkit-font-smoothing:antialiased}
+
+    /* PIN ──────────────────── */
+    #pin-screen{position:fixed;inset:0;z-index:999;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px}
+    #pin-screen.hidden{display:none}
+    .pin-logo{width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,var(--green),var(--green-lt));border:2px solid var(--gold);display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-size:28px;font-weight:700;color:var(--gold);margin-bottom:18px}
+    #pin-screen h1{font-family:'Playfair Display',serif;font-size:24px;margin-bottom:3px}
+    #pin-screen h1 span{color:var(--gold)}
+    #pin-screen p{font-size:13px;color:var(--muted);margin-bottom:28px}
+    .pin-dots{display:flex;gap:14px;margin-bottom:26px}
+    .pin-dot{width:16px;height:16px;border-radius:50%;border:2px solid var(--border);background:transparent;transition:all .2s}
+    .pin-dot.filled{background:var(--gold);border-color:var(--gold)}
+    .pin-pad{display:grid;grid-template-columns:repeat(3,72px);gap:12px}
+    .pin-key{height:64px;border-radius:16px;background:var(--card);border:1px solid var(--border);color:var(--white);font-size:24px;font-weight:700;cursor:pointer;transition:all .15s;-webkit-tap-highlight-color:transparent;display:flex;align-items:center;justify-content:center}
+    .pin-key:active{background:var(--green);border-color:var(--gold);transform:scale(.95)}
+    .pin-key.del{font-size:18px;color:var(--muted)}
+    .pin-error{color:var(--red);font-size:13px;margin-top:14px;min-height:20px}
+
+    /* HEADER ──────────────── */
+    #main-app{display:none;min-height:100vh;flex-direction:column}
+    #main-app.show{display:flex}
+    header{background:linear-gradient(90deg,#040a06,#0f2418,#040a06);border-bottom:1px solid var(--border);padding:12px 18px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:50}
+    .hlogo{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--green),var(--green-lt));border:1px solid var(--gold);display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-size:15px;font-weight:700;color:var(--gold);flex-shrink:0}
+    .hname{font-family:'Playfair Display',serif;font-size:17px;font-weight:700}
+    .hname span{color:var(--gold)}
+    .hsub{font-size:10px;color:var(--muted)}
+    .lock-btn{margin-left:auto;padding:7px 13px;border-radius:9px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;font-weight:700;cursor:pointer;transition:all .2s}
+    .lock-btn:hover{border-color:var(--red);color:var(--red)}
+
+    /* TABS ──────────────────── */
+    .tab-bar{display:flex;gap:2px;padding:10px 14px 0;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:61px;z-index:40;overflow-x:auto;-webkit-overflow-scrolling:touch}
+    .tab-bar::-webkit-scrollbar{display:none}
+    .tab-btn{padding:9px 16px;border-radius:9px 9px 0 0;border:1px solid transparent;border-bottom:none;font-size:12px;font-weight:700;color:var(--muted);background:transparent;cursor:pointer;white-space:nowrap;transition:all .2s;-webkit-tap-highlight-color:transparent}
+    .tab-btn.active{background:var(--card);border-color:var(--border);color:var(--gold)}
+
+    /* PANELS ──────────────────── */
+    #content{flex:1;padding:16px;max-width:700px;margin:0 auto;width:100%}
+    .tab-panel{display:none}
+    .tab-panel.active{display:block}
+
+    /* SHARED FORM ELEMENTS */
+    .section-head{font-family:'Playfair Display',serif;font-size:17px;font-weight:700;margin-bottom:14px}
+    .section-head span{color:var(--gold)}
+    .field-group{margin-bottom:12px}
+    .field-group label{display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:5px}
+    .fi{width:100%;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:9px;padding:10px 13px;color:var(--white);font-size:14px;font-family:'Lato',sans-serif;outline:none;transition:border-color .2s}
+    .fi:focus{border-color:var(--gold)}
+    .fi::placeholder{color:rgba(245,240,232,.22)}
+    .fi select option{background:#0f2418}
+    .fi-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .fi-row-3{display:grid;grid-template-columns:1fr 1fr 80px;gap:8px}
+
+    .add-form{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:16px}
+    .add-form h3{font-size:13px;font-weight:700;color:var(--gold-lt);margin-bottom:12px;letter-spacing:.5px}
+
+    .btn-primary{padding:11px 22px;border-radius:11px;background:linear-gradient(135deg,var(--green),var(--green-lt));border:1px solid var(--gold);color:var(--gold-lt);font-size:14px;font-weight:700;cursor:pointer;transition:all .2s;font-family:'Lato',sans-serif}
+    .btn-primary:active{opacity:.8;transform:scale(.98)}
+    .btn-sm{padding:7px 14px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:12px;font-weight:700;cursor:pointer;transition:all .2s;font-family:'Lato',sans-serif}
+    .btn-sm:hover{border-color:var(--gold);color:var(--gold)}
+    .btn-danger{border-color:rgba(224,92,92,.4);color:var(--red)}
+    .btn-danger:hover{background:rgba(224,92,92,.1);border-color:var(--red)}
+
+    /* LIST ITEMS */
+    .item-list{display:flex;flex-direction:column;gap:8px;margin-bottom:20px}
+    .item-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:13px 15px;display:flex;align-items:center;gap:12px}
+    .item-card .item-main{flex:1;min-width:0}
+    .item-name{font-size:14px;font-weight:700}
+    .item-sub{font-size:11px;color:var(--muted);margin-top:2px}
+    .item-price{font-size:16px;font-weight:700;color:var(--gold);flex-shrink:0}
+    .item-del{padding:6px 10px;border-radius:8px;border:1px solid rgba(224,92,92,.3);background:transparent;color:var(--red);font-size:13px;cursor:pointer;transition:all .2s;flex-shrink:0}
+    .item-del:hover{background:rgba(224,92,92,.12);border-color:var(--red)}
+
+    /* GALLERY GRID */
+    .gallery-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px}
+    .gallery-thumb{position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;border:1px solid var(--border)}
+    .gallery-thumb img{width:100%;height:100%;object-fit:cover}
+    .gallery-thumb .del-overlay{position:absolute;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .2s;cursor:pointer}
+    .gallery-thumb:hover .del-overlay{opacity:1}
+    .gallery-thumb .del-overlay span{font-size:22px}
+
+    /* ANALYTICS */
+    .analytics-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:20px}
+    .a-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;text-align:center}
+    .a-card .big{font-family:'Playfair Display',serif;font-size:30px;font-weight:700;color:var(--gold)}
+    .a-card .lbl{font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-top:3px}
+    .chart-wrap{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:14px}
+    .chart-wrap h3{font-size:13px;font-weight:700;color:var(--gold-lt);margin-bottom:14px}
+    .chart-wrap canvas{max-height:220px}
+
+    /* SETTINGS */
+    .settings-section{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:14px}
+    .settings-section h3{font-size:13px;font-weight:700;color:var(--gold-lt);margin-bottom:14px;letter-spacing:.5px}
+    .save-row{display:flex;justify-content:flex-end;gap:10px;margin-top:14px}
+
+    /* QR GEN */
+    .qr-gen{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;text-align:center;margin-bottom:14px}
+    .qr-gen h3{font-size:13px;font-weight:700;color:var(--gold-lt);margin-bottom:14px}
+    #qr-output img{border-radius:10px;border:3px solid var(--gold)}
+    .qr-url{font-size:11px;color:var(--muted);margin-top:8px;word-break:break-all}
+
+    /* STYLISTS */
+    .stylist-list{display:flex;flex-direction:column;gap:7px;margin-bottom:12px}
+    .stylist-item{display:flex;align-items:center;gap:10px;background:var(--card2);border:1px solid var(--border);border-radius:9px;padding:9px 13px}
+    .stylist-item input{flex:1;background:transparent;border:none;color:var(--white);font-size:14px;font-family:'Lato',sans-serif;outline:none}
+
+    /* TOAST */
+    #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--green);border:1px solid var(--gold);border-radius:11px;padding:11px 20px;font-size:13px;font-weight:700;color:var(--gold-lt);transition:transform .3s ease;z-index:100;white-space:nowrap}
+    #toast.show{transform:translateX(-50%) translateY(0)}
+
+    /* DIVIDER */
+    .divider{border:none;border-top:1px solid var(--border);margin:18px 0}
+  </style>
+</head>
+<body>
+
+<!-- PIN -->
+<div id="pin-screen">
+  <div class="pin-logo">G</div>
+  <h1>GMB <span>Admin</span></h1>
+  <p>Enter your admin PIN</p>
+  <div class="pin-dots" id="pin-dots">
+    <div class="pin-dot" id="pd-0"></div><div class="pin-dot" id="pd-1"></div>
+    <div class="pin-dot" id="pd-2"></div><div class="pin-dot" id="pd-3"></div>
+  </div>
+  <div class="pin-pad">
+    <button class="pin-key" onclick="pinKey('1')">1</button>
+    <button class="pin-key" onclick="pinKey('2')">2</button>
+    <button class="pin-key" onclick="pinKey('3')">3</button>
+    <button class="pin-key" onclick="pinKey('4')">4</button>
+    <button class="pin-key" onclick="pinKey('5')">5</button>
+    <button class="pin-key" onclick="pinKey('6')">6</button>
+    <button class="pin-key" onclick="pinKey('7')">7</button>
+    <button class="pin-key" onclick="pinKey('8')">8</button>
+    <button class="pin-key" onclick="pinKey('9')">9</button>
+    <div></div>
+    <button class="pin-key" onclick="pinKey('0')">0</button>
+    <button class="pin-key del" onclick="pinDel()">⌫</button>
+  </div>
+  <div class="pin-error" id="pin-error"></div>
+</div>
+
+<!-- MAIN APP -->
+<div id="main-app">
+  <header>
+    <div class="hlogo">G</div>
+    <div><div class="hname">GMB <span>Admin</span></div><div class="hsub">Salon Management</div></div>
+    <button class="lock-btn" onclick="lockApp()">🔒 Lock</button>
+  </header>
+
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="switchTab('services')">✂️ Services</button>
+    <button class="tab-btn" onclick="switchTab('specials')">🏷️ Specials</button>
+    <button class="tab-btn" onclick="switchTab('gallery')">🖼️ Gallery</button>
+    <button class="tab-btn" onclick="switchTab('analytics')">📊 Analytics</button>
+    <button class="tab-btn" onclick="switchTab('settings')">⚙️ Settings</button>
+  </div>
+
+  <div id="content">
+
+    <!-- SERVICES -->
+    <div id="tab-services" class="tab-panel active">
+      <div style="margin-bottom:14px">
+        <div class="section-head">Services & <span>Prices</span></div>
+        <div class="add-form">
+          <h3>➕ Add Service</h3>
+          <div class="fi-row" style="margin-bottom:10px">
+            <div class="field-group" style="margin:0">
+              <label>Service Name</label>
+              <input class="fi" id="svc-name" placeholder="e.g. Silk Press" type="text"/>
+            </div>
+            <div class="field-group" style="margin:0">
+              <label>Price</label>
+              <input class="fi" id="svc-price" placeholder="e.g. $85" type="text"/>
+            </div>
+          </div>
+          <div class="fi-row" style="margin-bottom:12px">
+            <div class="field-group" style="margin:0">
+              <label>Category</label>
+              <input class="fi" id="svc-cat" placeholder="e.g. Natural Hair" type="text"/>
+            </div>
+            <div class="field-group" style="margin:0">
+              <label>Duration (min)</label>
+              <input class="fi" id="svc-dur" placeholder="60" type="number"/>
+            </div>
+          </div>
+          <button class="btn-primary" onclick="addService()">Add Service</button>
+        </div>
+      </div>
+      <div class="item-list" id="services-list"></div>
+    </div>
+
+    <!-- SPECIALS -->
+    <div id="tab-specials" class="tab-panel">
+      <div class="section-head">Specials & <span>Promotions</span></div>
+      <div class="add-form">
+        <h3>➕ Add Special / Promotion</h3>
+        <div class="field-group">
+          <label>Title</label>
+          <input class="fi" id="sp-title" placeholder="e.g. Summer Special 🌞" type="text"/>
+        </div>
+        <div class="field-group">
+          <label>Description</label>
+          <input class="fi" id="sp-desc" placeholder="e.g. 20% off Silk Press all July!" type="text"/>
+        </div>
+        <div class="fi-row">
+          <div class="field-group" style="margin:0">
+            <label>Discount / Price</label>
+            <input class="fi" id="sp-price" placeholder="e.g. 20% off or $75" type="text"/>
+          </div>
+          <div class="field-group" style="margin:0">
+            <label>Expires (optional)</label>
+            <input class="fi" id="sp-exp" type="date"/>
+          </div>
+        </div>
+        <div style="margin-top:12px">
+          <button class="btn-primary" onclick="addSpecial()">Add Promotion</button>
+        </div>
+      </div>
+      <div class="item-list" id="specials-list"></div>
+    </div>
+
+    <!-- GALLERY -->
+    <div id="tab-gallery" class="tab-panel">
+      <div class="section-head">Gallery <span>Photos</span></div>
+      <div class="add-form">
+        <h3>➕ Add Photo</h3>
+        <div class="field-group">
+          <label>Image URL</label>
+          <input class="fi" id="gal-url" placeholder="https://... (paste image URL)" type="url"/>
+        </div>
+        <div class="field-group">
+          <label>Caption (optional)</label>
+          <input class="fi" id="gal-cap" placeholder="e.g. Box Braids by Stylist 1" type="text"/>
+        </div>
+        <div style="margin-top:12px">
+          <button class="btn-primary" onclick="addPhoto()">Add Photo</button>
+        </div>
+      </div>
+      <div class="gallery-grid" id="gallery-grid"></div>
+    </div>
+
+    <!-- ANALYTICS -->
+    <div id="tab-analytics" class="tab-panel">
+      <div class="section-head">Analytics <span>Dashboard</span></div>
+      <div class="analytics-grid" id="analytics-stats">
+        <div class="a-card"><div class="big" id="an-total">–</div><div class="lbl">Total Clients (30d)</div></div>
+        <div class="a-card"><div class="big" id="an-today">–</div><div class="lbl">Today</div></div>
+        <div class="a-card"><div class="big" id="an-peak">–</div><div class="lbl">Peak Day</div></div>
+        <div class="a-card"><div class="big" id="an-avg">–</div><div class="lbl">Daily Avg</div></div>
+      </div>
+      <div class="chart-wrap">
+        <h3>📅 Daily Clients (Last 14 Days)</h3>
+        <canvas id="chart-daily"></canvas>
+      </div>
+      <div class="chart-wrap">
+        <h3>✂️ Services Breakdown</h3>
+        <canvas id="chart-services"></canvas>
+      </div>
+      <div style="text-align:center;margin-top:10px">
+        <button class="btn-sm" onclick="window._loadAnalytics&&window._loadAnalytics()">🔄 Refresh</button>
+      </div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div id="tab-settings" class="tab-panel">
+      <div class="section-head">Salon <span>Settings</span></div>
+
+      <div class="settings-section">
+        <h3>🔗 Google Review & Social</h3>
+        <div class="field-group">
+          <label>Google Review URL</label>
+          <input class="fi" id="set-review" type="url" placeholder="https://g.page/r/..."/>
+        </div>
+        <div class="field-group">
+          <label>Instagram SnapWidget Embed URL</label>
+          <input class="fi" id="set-instagram" type="url" placeholder="https://snapwidget.com/embed/..."/>
+        </div>
+        <div class="save-row"><button class="btn-primary" onclick="saveSocialSettings()">Save</button></div>
+      </div>
+
+      <div class="settings-section">
+        <h3>📍 Location & SMS</h3>
+        <div class="fi-row">
+          <div class="field-group" style="margin:0">
+            <label>City for Weather</label>
+            <input class="fi" id="set-city" type="text" placeholder="Columbus,Ohio"/>
+          </div>
+          <div class="field-group" style="margin:0">
+            <label>Textbelt SMS Key</label>
+            <input class="fi" id="set-sms" type="text" placeholder="textbelt"/>
+          </div>
+        </div>
+        <div class="field-group">
+          <label>Salon Name (for SMS)</label>
+          <input class="fi" id="set-salon-name" type="text" placeholder="GMB Beauty"/>
+        </div>
+        <div class="save-row"><button class="btn-primary" onclick="saveLocationSettings()">Save</button></div>
+      </div>
+
+      <div class="settings-section">
+        <h3>👩‍🎨 Stylists</h3>
+        <div class="stylist-list" id="stylist-list"></div>
+        <button class="btn-sm" onclick="addStylistRow()">+ Add Stylist</button>
+        <div class="save-row"><button class="btn-primary" onclick="saveStylists()">Save Stylists</button></div>
+      </div>
+
+      <div class="settings-section">
+        <h3>🔒 Staff PIN</h3>
+        <div class="field-group">
+          <label>New Staff PIN (4 digits)</label>
+          <input class="fi" id="set-pin" type="password" placeholder="4 digit PIN" maxlength="4" pattern="[0-9]{4}"/>
+        </div>
+        <div class="field-group">
+          <label>Confirm PIN</label>
+          <input class="fi" id="set-pin2" type="password" placeholder="Confirm PIN" maxlength="4" pattern="[0-9]{4}"/>
+        </div>
+        <div class="save-row"><button class="btn-primary" onclick="savePin()">Update PIN</button></div>
+      </div>
+
+      <hr class="divider"/>
+
+      <!-- QR Generator -->
+      <div class="qr-gen">
+        <h3>📱 QR Code Generator</h3>
+        <div class="field-group" style="text-align:left">
+          <label>Enter URL to generate QR code</label>
+          <input class="fi" id="qr-input" type="url" placeholder="https://..." oninput="genQR()"/>
+        </div>
+        <div id="qr-output" style="margin-top:14px"></div>
+        <div class="qr-url" id="qr-url-display"></div>
+        <div style="margin-top:12px;font-size:11px;color:var(--muted)">Use this for your kiosk check-in URL, review link, etc.</div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main-app -->
+
+<div id="toast"></div>
+
+<script>
+const ADMIN_PIN='1234'; // ← Change this
+
+// ── PIN ────────────────────────────────────────────────────
+let pinBuf='';
+function pinKey(k){if(pinBuf.length>=4)return;pinBuf+=k;updateDots();if(pinBuf.length===4)setTimeout(checkPin,80);}
+function pinDel(){pinBuf=pinBuf.slice(0,-1);updateDots();document.getElementById('pin-error').textContent='';}
+function updateDots(){for(let i=0;i<4;i++)document.getElementById(`pd-${i}`).classList.toggle('filled',i<pinBuf.length);}
+function checkPin(){
+  if(pinBuf===ADMIN_PIN){
+    document.getElementById('pin-screen').classList.add('hidden');
+    document.getElementById('main-app').classList.add('show');
+    if(window._loadConfig)window._loadConfig();
+    if(window._loadAnalytics)window._loadAnalytics();
+  }else{document.getElementById('pin-error').textContent='Incorrect PIN.';pinBuf='';updateDots();setTimeout(()=>document.getElementById('pin-error').textContent='',2000);}
+}
+function lockApp(){pinBuf='';updateDots();document.getElementById('main-app').classList.remove('show');document.getElementById('pin-screen').classList.remove('hidden');}
+
+// ── TABS ───────────────────────────────────────────────────
+function switchTab(id){
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  event.currentTarget.classList.add('active');
+  if(id==='analytics'&&window._loadAnalytics)window._loadAnalytics();
+}
+
+// ── SERVICES ───────────────────────────────────────────────
+let _services={};
+window._renderServices=function(data){
+  _services=data||{};
+  const list=document.getElementById('services-list');
+  list.innerHTML='';
+  Object.entries(_services).forEach(([key,s])=>{
+    const el=document.createElement('div');
+    el.className='item-card';
+    el.innerHTML=`<div class="item-main"><div class="item-name">${esc(s.name)}</div><div class="item-sub">${esc(s.category||'')}${s.duration?` · ${s.duration} min`:''}</div></div><div class="item-price">${esc(s.price)}</div><button class="item-del" onclick="delService('${key}')">✕</button>`;
+    list.appendChild(el);
+  });
+  if(!Object.keys(_services).length)list.innerHTML='<div style="text-align:center;padding:24px;color:var(--muted);border:1px dashed var(--border);border-radius:12px">No services added yet</div>';
+};
+function addService(){
+  const n=v('svc-name'),p=v('svc-price'),c=v('svc-cat'),d=v('svc-dur');
+  if(!n||!p){toast('Name and price required');return;}
+  const key='svc_'+Date.now();
+  _services[key]={name:n,price:p,category:c,duration:parseInt(d)||60};
+  window._fbSet('config/services',_services).then(()=>{window._renderServices(_services);clearInputs('svc-name','svc-price','svc-cat','svc-dur');toast('Service saved ✓');});
+}
+function delService(key){if(!confirm('Delete this service?'))return;delete _services[key];window._fbSet('config/services',_services).then(()=>{window._renderServices(_services);toast('Deleted');});}
+
+// ── SPECIALS ───────────────────────────────────────────────
+let _specials={};
+window._renderSpecials=function(data){
+  _specials=data||{};
+  const list=document.getElementById('specials-list');
+  list.innerHTML='';
+  Object.entries(_specials).forEach(([key,s])=>{
+    const exp=s.expires?`<span style="color:var(--muted)"> · Expires ${s.expires}</span>`:'';
+    const el=document.createElement('div');
+    el.className='item-card';
+    el.innerHTML=`<div class="item-main"><div class="item-name">${esc(s.title)}</div><div class="item-sub">${esc(s.description||'')}${exp}</div></div><div class="item-price">${esc(s.discount||s.price||'')}</div><button class="item-del" onclick="delSpecial('${key}')">✕</button>`;
+    list.appendChild(el);
+  });
+  if(!Object.keys(_specials).length)list.innerHTML='<div style="text-align:center;padding:24px;color:var(--muted);border:1px dashed var(--border);border-radius:12px">No promotions added yet</div>';
+};
+function addSpecial(){
+  const t=v('sp-title'),desc=v('sp-desc'),p=v('sp-price'),exp=v('sp-exp');
+  if(!t){toast('Title required');return;}
+  const key='sp_'+Date.now();
+  _specials[key]={title:t,description:desc,discount:p,expires:exp||null};
+  window._fbSet('config/specials',_specials).then(()=>{window._renderSpecials(_specials);clearInputs('sp-title','sp-desc','sp-price','sp-exp');toast('Promotion saved ✓');});
+}
+function delSpecial(key){if(!confirm('Delete this promotion?'))return;delete _specials[key];window._fbSet('config/specials',_specials).then(()=>{window._renderSpecials(_specials);toast('Deleted');});}
+
+// ── GALLERY ───────────────────────────────────────────────
+let _gallery=[];
+window._renderGallery=function(data){
+  _gallery=Array.isArray(data)?data:[];
+  const grid=document.getElementById('gallery-grid');
+  grid.innerHTML='';
+  _gallery.forEach((p,i)=>{
+    const el=document.createElement('div');el.className='gallery-thumb';
+    el.innerHTML=`<img src="${esc(p.url)}" alt="${esc(p.caption||'')}" loading="lazy"><div class="del-overlay" onclick="delPhoto(${i})"><span>🗑️</span></div>`;
+    grid.appendChild(el);
+  });
+  if(!_gallery.length)grid.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:28px;color:var(--muted);border:1px dashed var(--border);border-radius:12px">No photos yet</div>';
+};
+function addPhoto(){
+  const url=v('gal-url'),cap=v('gal-cap');
+  if(!url){toast('URL required');return;}
+  _gallery.push({url,caption:cap});
+  window._fbSet('config/photos',_gallery).then(()=>{window._renderGallery(_gallery);clearInputs('gal-url','gal-cap');toast('Photo added ✓');});
+}
+function delPhoto(i){if(!confirm('Remove this photo?'))return;_gallery.splice(i,1);window._fbSet('config/photos',_gallery).then(()=>{window._renderGallery(_gallery);toast('Removed');});}
+
+// ── ANALYTICS ─────────────────────────────────────────────
+let chartDaily=null,chartSvc=null;
+window._renderAnalytics=function(data){
+  // Last 14 days
+  const today=new Date();
+  const labels=[],counts=[];
+  let total=0,peakDay=0,peakLabel='';
+  for(let i=13;i>=0;i--){
+    const d=new Date(today);d.setDate(d.getDate()-i);
+    const key=d.toISOString().split('T')[0];
+    const lbl=`${d.getMonth()+1}/${d.getDate()}`;
+    const n=data[key]?.total||0;
+    labels.push(lbl);counts.push(n);total+=n;
+    if(n>peakDay){peakDay=n;peakLabel=lbl;}
+  }
+  const days=labels.filter((_,i)=>counts[i]>0).length||1;
+  document.getElementById('an-total').textContent=total;
+  document.getElementById('an-today').textContent=data[today.toISOString().split('T')[0]]?.total||0;
+  document.getElementById('an-peak').textContent=peakDay?`${peakDay}×`:'–';
+  document.getElementById('an-avg').textContent=Math.round(total/days);
+
+  // Daily chart
+  const dcCtx=document.getElementById('chart-daily').getContext('2d');
+  if(chartDaily)chartDaily.destroy();
+  chartDaily=new Chart(dcCtx,{type:'bar',data:{labels,datasets:[{label:'Clients',data:counts,backgroundColor:'rgba(201,168,76,.55)',borderColor:'#c9a84c',borderWidth:1.5,borderRadius:6}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'rgba(245,240,232,.5)',font:{size:10}}},y:{ticks:{color:'rgba(245,240,232,.5)',font:{size:10}},beginAtZero:true,grace:'5%'}}}});
+
+  // Services chart
+  const svcTotals={};
+  Object.values(data).forEach(day=>{
+    if(day.services){Object.entries(day.services).forEach(([k,v])=>{svcTotals[k]=(svcTotals[k]||0)+v;});}
+  });
+  const svcLabels=Object.keys(svcTotals).map(s=>s.replace(/_/g,' '));
+  const svcCounts=Object.values(svcTotals);
+  const COLORS=['#c9a84c','#2a7a4d','#7ab8ff','#5ecf8a','#e2c97a','#e05c5c','#a884ff','#ff9e7a'];
+  const scCtx=document.getElementById('chart-services').getContext('2d');
+  if(chartSvc)chartSvc.destroy();
+  if(svcLabels.length){
+    chartSvc=new Chart(scCtx,{type:'doughnut',data:{labels:svcLabels,datasets:[{data:svcCounts,backgroundColor:COLORS,borderWidth:0}]},options:{responsive:true,plugins:{legend:{labels:{color:'rgba(245,240,232,.7)',font:{size:11}}}}}});
+  }else{
+    scCtx.canvas.parentElement.innerHTML='<h3>✂️ Services Breakdown</h3><div style="text-align:center;padding:36px;color:var(--muted)">No data yet</div>';
+  }
+};
+
+// ── SETTINGS ──────────────────────────────────────────────
+window._loadSettings=function(s){
+  if(s.reviewUrl)setVal('set-review',s.reviewUrl);
+  if(s.instagramSrc)setVal('set-instagram',s.instagramSrc);
+  if(s.city)setVal('set-city',s.city);
+  if(s.smsKey)setVal('set-sms',s.smsKey);
+  if(s.salonName)setVal('set-salon-name',s.salonName);
+};
+function saveSocialSettings(){
+  const patch={reviewUrl:v('set-review')||null,instagramSrc:v('set-instagram')||null};
+  window._fbSet('config/settings',{...((window._cfg&&window._cfg.settings)||{}),...patch}).then(()=>toast('Saved ✓'));
+}
+function saveLocationSettings(){
+  const patch={city:v('set-city')||'Columbus,Ohio',smsKey:v('set-sms')||'textbelt',salonName:v('set-salon-name')||'GMB Beauty'};
+  window._fbSet('config/settings',{...((window._cfg&&window._cfg.settings)||{}),...patch}).then(()=>toast('Saved ✓'));
+}
+function savePin(){
+  const p1=v('set-pin'),p2=v('set-pin2');
+  if(!p1||p1.length!==4||!/^\d{4}$/.test(p1)){toast('PIN must be 4 digits');return;}
+  if(p1!==p2){toast('PINs do not match');return;}
+  window._fbSet('config/settings/staffPin',p1).then(()=>{clearInputs('set-pin','set-pin2');toast('PIN updated ✓ — update the code too!');});
+}
+
+// ── STYLISTS ──────────────────────────────────────────────
+window._loadStylists=function(arr){
+  const list=document.getElementById('stylist-list');
+  list.innerHTML='';
+  (arr||[]).forEach(name=>addStylistRow(name));
+};
+function addStylistRow(val=''){
+  const row=document.createElement('div');row.className='stylist-item';
+  row.innerHTML=`<input type="text" placeholder="Stylist name" value="${esc(val)}"/><button class="btn-sm btn-danger" onclick="this.parentElement.remove()">✕</button>`;
+  document.getElementById('stylist-list').appendChild(row);
+}
+function saveStylists(){
+  const names=[...document.querySelectorAll('#stylist-list input')].map(i=>i.value.trim()).filter(Boolean);
+  if(!names.length){toast('Add at least one stylist');return;}
+  window._fbSet('config/stylists',names).then(()=>toast('Stylists saved ✓'));
+}
+
+// ── QR GENERATOR ──────────────────────────────────────────
+let qrTimer;
+function genQR(){
+  clearTimeout(qrTimer);
+  qrTimer=setTimeout(()=>{
+    const url=document.getElementById('qr-input').value.trim();
+    const out=document.getElementById('qr-output');
+    const disp=document.getElementById('qr-url-display');
+    out.innerHTML='';disp.textContent='';
+    if(!url)return;
+    try{
+      const qr=qrcode(0,'M');qr.addData(url);qr.make();
+      const img=document.createElement('img');img.src=qr.createDataURL(6,4);
+      out.appendChild(img);disp.textContent=url;
+    }catch(e){out.textContent='URL too long — try a shorter URL';}
+  },350);
+}
+
+// ── HELPERS ───────────────────────────────────────────────
+function v(id){return(document.getElementById(id)?.value||'').trim();}
+function setVal(id,val){const el=document.getElementById(id);if(el)el.value=val;}
+function clearInputs(...ids){ids.forEach(id=>{const el=document.getElementById(id);if(el)el.value=''});}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/'/g,'&#39;');}
+let toastT;
+function toast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),3000);}
+// Ensure Firebase helpers always exist (offline fallback)
+if(!window._fbSet){window._fbSet=()=>{toast('⚠️ Add Firebase config to save data');return Promise.resolve();};}
+if(!window._fbGet){window._fbGet=()=>Promise.resolve(null);}
+if(!window._fbDel){window._fbDel=()=>Promise.resolve();}
+</script>
+</body>
+</html>
