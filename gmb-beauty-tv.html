@@ -30,9 +30,30 @@
     // Load admin-managed config (services, specials, gallery, settings)
     onValue(ref(db,'config'), snap => {
       const cfg = snap.val()||{};
-      if(cfg.services?.length)   window._renderServices(cfg.services);
-      if(cfg.specials?.length)   window._renderSpecials(cfg.specials.filter(s=>s.active));
-      if(cfg.gallery?.length)    window._renderGallery(cfg.gallery);
+
+      // Services — stored as object in admin, convert to array for TV
+      if(cfg.services && typeof cfg.services==='object'){
+        const svcArr=Object.values(cfg.services).map(s=>({
+          name:s.name, price:s.price, category:s.category||'Services',
+          duration:s.duration||60, desc:s.description||s.desc||''
+        }));
+        if(svcArr.length) window._renderServices(svcArr);
+      }
+
+      // Specials — stored as object in admin, convert to array for TV
+      if(cfg.specials && typeof cfg.specials==='object'){
+        const spArr=Object.values(cfg.specials).map(s=>({
+          title:s.title, desc:s.description||s.desc||'',
+          tag:s.tag||'Special', newPrice:s.discount||s.newPrice||s.price||'',
+          oldPrice:s.oldPrice||'', endDate:s.expires||s.endDate||''
+        }));
+        if(spArr.length) window._renderSpecials(spArr);
+      }
+
+      // Gallery — stored as array
+      if(cfg.photos?.length)  window._renderGallery(cfg.photos);
+      else if(cfg.gallery?.length) window._renderGallery(cfg.gallery);
+
       if(cfg.settings?.instagramEmbed) window._setInstagram(cfg.settings.instagramEmbed);
       if(cfg.settings?.city)    window._weatherCity = cfg.settings.city;
     });

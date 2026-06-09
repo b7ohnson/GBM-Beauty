@@ -42,6 +42,15 @@
           if(s.smsKey && smsEl) smsEl.value=s.smsKey;
         });
 
+        onValue(ref(db,'config/stylists'),snap=>{
+          const list=snap.val();
+          if(Array.isArray(list)&&list.length){
+            window._STYLISTS=list;
+            list.forEach(s=>{if(!(s in window._stylistStatus))window._stylistStatus[s]=true;});
+            if(window._authed) buildStylists();
+          }
+        });
+
         window._fbUpdate=(key,patch)=>update(ref(db,`waitlist/${key}`),patch);
         window._fbRemove=key=>remove(ref(db,`waitlist/${key}`));
 
@@ -292,7 +301,9 @@
 
 <script>
 const STAFF_PIN='1234'; // ← Change this PIN
-const STYLISTS=['Stylist 1','Stylist 2','Stylist 3'];
+const STYLISTS_DEFAULT=['Stylist 1','Stylist 2','Stylist 3'];
+if(!window._STYLISTS) window._STYLISTS=STYLISTS_DEFAULT;
+if(!window._stylistStatus) window._stylistStatus={};
 const SVC_DUR={'Wash & Set':60,'Silk Press':90,'Relaxer':120,'Color & Highlights':150,'Deep Condition':45,'Trim & Dusting':30,'Box Braids':240,'Knotless Braids':270,'Senegalese Twists':240,'Cornrows':90,'TWA Shapeup':60,'Loc Retwist':120,'Loc Starter':180,'Not Sure / Other':60};
 
 window._authed=false;
@@ -327,11 +338,11 @@ function toggleAutoSms(){autoSms=!autoSms;document.getElementById('auto-toggle')
 document.getElementById('auto-toggle').classList.add('on');
 
 // ── STYLISTS ───────────────────────────────────────────────
-const stylistStatus={};
-STYLISTS.forEach(s=>stylistStatus[s]=true);
+const stylistStatus=window._stylistStatus;
+window._STYLISTS.forEach(s=>{if(!(s in stylistStatus))stylistStatus[s]=true;});
 function buildStylists(){
   const row=document.getElementById('stylists-row');row.innerHTML='';
-  STYLISTS.forEach(name=>{
+  window._STYLISTS.forEach(name=>{
     const btn=document.createElement('div');
     btn.className='stylist-toggle'+(stylistStatus[name]?' available':'');
     btn.innerHTML=`<div class="st-dot"></div><div class="st-name">${esc(name)}</div>`;
@@ -446,7 +457,7 @@ window._renderStaff=function(entries){
         <label>Assign:</label>
         <select onchange="window._fbUpdate('${key}',{assignedStylist:this.value||null})">
           <option value="">Unassigned</option>
-          ${STYLISTS.map(s=>`<option value="${s}"${e.assignedStylist===s?' selected':''}>${s}</option>`).join('')}
+          ${window._STYLISTS.map(s=>`<option value="${s}"${e.assignedStylist===s?' selected':''}>${s}</option>`).join('')}
         </select>
       </div>
       <div class="sc-note-area">
