@@ -419,9 +419,15 @@
             <input class="fi" id="set-sms" type="text" placeholder="textbelt"/>
           </div>
         </div>
-        <div class="field-group">
-          <label>Salon Name (for SMS)</label>
-          <input class="fi" id="set-salon-name" type="text" placeholder="GMB Beauty"/>
+        <div class="fi-row">
+          <div class="field-group" style="margin:0">
+            <label>Salon Name (for SMS)</label>
+            <input class="fi" id="set-salon-name" type="text" placeholder="GBM Beauty"/>
+          </div>
+          <div class="field-group" style="margin:0">
+            <label>Max Queue Size <span style="font-weight:300;text-transform:none">(0 = unlimited)</span></label>
+            <input class="fi" id="set-max-queue" type="number" min="0" placeholder="0"/>
+          </div>
         </div>
         <div class="save-row"><button class="btn-primary" onclick="saveLocationSettings()">Save</button></div>
       </div>
@@ -653,6 +659,7 @@ window._loadSettings=function(s){
   if(s.city)setVal('set-city',s.city);
   if(s.smsKey)setVal('set-sms',s.smsKey);
   if(s.salonName)setVal('set-salon-name',s.salonName);
+  if(s.maxQueueSize!=null)setVal('set-max-queue',s.maxQueueSize);
   if(s.calendarId)setVal('set-cal-id',s.calendarId);
   if(s.calendarKey)setVal('set-cal-key',s.calendarKey);
 };
@@ -667,7 +674,7 @@ function saveSocialSettings(){
   window._fbSet('config/settings',{...((window._cfg&&window._cfg.settings)||{}),...patch}).then(()=>toast('Saved ✓'));
 }
 function saveLocationSettings(){
-  const patch={city:v('set-city')||'Columbus,Ohio',smsKey:v('set-sms')||'textbelt',salonName:v('set-salon-name')||'GMB Beauty'};
+  const patch={city:v('set-city')||'Columbus,Ohio',smsKey:v('set-sms')||'textbelt',salonName:v('set-salon-name')||'GBM Beauty',maxQueueSize:parseInt(document.getElementById('set-max-queue')?.value||'0')||0};
   window._fbSet('config/settings',{...((window._cfg&&window._cfg.settings)||{}),...patch}).then(()=>toast('Saved ✓'));
 }
 function savePin(){
