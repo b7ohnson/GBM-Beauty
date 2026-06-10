@@ -40,6 +40,9 @@
           if(s.reviewUrl) window._reviewUrl=s.reviewUrl;
           const smsEl=document.getElementById('sms-key');
           if(s.smsKey && smsEl) smsEl.value=s.smsKey;
+          if(s.calendarId)  window._calendarId=s.calendarId;
+          if(s.calendarKey) window._calendarKey=s.calendarKey;
+          if(s.calendarId && s.calendarKey) initCalendar();
         });
 
         onValue(ref(db,'config/stylists'),snap=>{
@@ -276,6 +279,15 @@
 
     <div class="stylists-row" id="stylists-row"></div>
 
+    <!-- APPOINTMENTS -->
+    <div id="cal-section" style="display:none;margin-bottom:14px">
+      <div class="section-head">
+        <div class="section-title">📅 Today's <span>Appointments</span></div>
+        <div class="section-count" id="cal-count">–</div>
+      </div>
+      <div id="cal-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px"></div>
+    </div>
+
     <div class="section-head">
       <div class="section-title">Queue <span>Management</span></div>
       <div class="section-count" id="q-count">0 guests</div>
@@ -370,14 +382,26 @@ function closeReviewModal(){document.getElementById('review-modal').classList.re
 // ── SMS ────────────────────────────────────────────────────
 async function sendSms(phone,name,msg){
   if(!phone){toast('No phone on file for '+name);return false;}
+  // Normalize phone — strip everything except digits, ensure 10 digits
+  const digits=String(phone).replace(/\D/g,'');
+  const normalized=digits.length===10?'+1'+digits:digits.length===11&&digits[0]==='1'?'+'+digits:digits;
   const key=document.getElementById('sms-key').value.trim()||'textbelt';
   const message=msg||`Hi ${name.split(' ')[0]}! You're next at GMB Beauty 💅 Please head back in.`;
   try{
-    const r=await fetch('https://textbelt.com/text',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone,message,key})});
+    // Use form-encoded to avoid CORS preflight issues
+    const r=await fetch('https://textbelt.com/text',{
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:new URLSearchParams({phone:normalized,message,key})
+    });
     const d=await r.json();
     if(d.success){toast(`✓ Text sent to ${name}`);return true;}
-    else{toast('SMS failed: '+(d.error||'check key'));return false;}
-  }catch(e){toast('SMS error — check connection');return false;}
+    else{toast('SMS failed: '+(d.error||'unknown error — check key & phone'));return false;}
+  }catch(e){
+    console.error('SMS error:',e);
+    toast('SMS error: '+(e.message||'check connection'));
+    return false;
+  }
 }
 
 // ── SERVICE TIMER ──────────────────────────────────────────
@@ -514,6 +538,101 @@ function toast(msg){const el=document.getElementById('toast');el.textContent=msg
 
 window._liveQueue=[];
 buildStylists();
+
+// ── GOOGLE CALENDAR ────────────────────────────────────────
+let _calEvents=[];
+let _addedAppts=new Set();
+
+async function fetchCalendar(){
+  const id=window._calendarId,key=window._calendarKey;
+  if(!id||!key)return;
+  const now=new Date();
+  const start=new Date(now.getFullYear(),now.getMonth(),now.getDate()).toISOString();
+  const end=new Date(now.getFullYear(),now.getMonth(),now.getDate(),23,59,59).toISOString();
+  try{
+    const url=`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(id)}/events?key=${key}&timeMin=${start}&timeMax=${end}&singleEvents=true&orderBy=startTime`;
+    const r=await fetch(url);
+    const d=await r.json();
+    if(d.error){toast('Calendar: '+d.error.message);return;}
+    _calEvents=d.items||[];
+    renderCalendar();
+  }catch(e){toast('Calendar fetch failed');}
+}
+
+function renderCalendar(){
+  const section=document.getElementById('cal-section');
+  const list=document.getElementById('cal-list');
+  const count=document.getElementById('cal-count');
+  if(!_calEvents.length){section.style.display='none';return;}
+  section.style.display='';
+  count.textContent=`${_calEvents.length} appt${_calEvents.length!==1?'s':''}`;
+  list.innerHTML='';
+  _calEvents.forEach(ev=>{
+    const startDt=ev.start?.dateTime?new Date(ev.start.dateTime):null;
+    const endDt=ev.end?.dateTime?new Date(ev.end.dateTime):null;
+    const timeStr=startDt?startDt.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):'All day';
+    const endStr=endDt?endDt.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):'';
+    const isPast=endDt&&endDt<new Date();
+    const isNow=startDt&&endDt&&startDt<=new Date()&&endDt>=new Date();
+    const alreadyAdded=_addedAppts.has(ev.id);
+
+    // Parse name and service from event title (format: "Name - Service" or just "Name")
+    const parts=(ev.summary||'').split(/[-–]/);
+    const clientName=parts[0].trim();
+    const service=parts[1]?parts[1].trim():'Appointment';
+
+    const card=document.createElement('div');
+    card.className='item-card';
+    card.style.cssText=`opacity:${isPast?'.5':'1'};border-color:${isNow?'rgba(122,184,255,.5)':''}`;
+    card.innerHTML=`
+      <div class="item-main">
+        <div class="item-name">${esc(clientName)}${isNow?'  <span style="font-size:10px;color:var(--blue);font-weight:700">● NOW</span>':''}</div>
+        <div class="item-sub">${esc(service)} · ${timeStr}${endStr?' – '+endStr:''}</div>
+        ${ev.description?`<div class="item-sub" style="color:var(--blue);margin-top:2px">📝 ${esc(ev.description)}</div>`:''}
+      </div>
+      ${!isPast&&!alreadyAdded?`<button class="btn-sm" style="white-space:nowrap" onclick="addApptToQueue('${ev.id}','${esc(clientName)}','${esc(service)}',${startDt?startDt.getTime():Date.now()})">+ Queue</button>`:''}
+      ${alreadyAdded?`<span style="font-size:11px;color:var(--active)">✓ In Queue</span>`:''}`;
+    list.appendChild(card);
+  });
+}
+
+function addApptToQueue(evId,name,service,ts){
+  if(_addedAppts.has(evId))return;
+  const now=new Date();
+  const h=now.getHours(),m=now.getMinutes().toString().padStart(2,'0'),ampm=h>=12?'PM':'AM';
+  const entry={name,service,phone:null,status:'waiting',notified:false,autoNotify:false,
+    ts:Date.now(),timeStr:`${(h%12)||12}:${m} ${ampm}`,type:'appointment',calEventId:evId};
+  if(window._fbUpdate){
+    const key='appt_'+evId.replace(/[^a-z0-9]/gi,'_');
+    window._fbUpdate(key,entry).then(()=>{
+      _addedAppts.add(evId);
+      renderCalendar();
+      toast(`${name} added to queue`);
+    });
+  }
+}
+
+// Auto-add appointments 5 min before their start time
+function checkAutoAppts(){
+  const now=Date.now();
+  _calEvents.forEach(ev=>{
+    if(_addedAppts.has(ev.id))return;
+    const startDt=ev.start?.dateTime?new Date(ev.start.dateTime):null;
+    if(!startDt)return;
+    const diff=startDt.getTime()-now;
+    if(diff<=5*60*1000&&diff>-10*60*1000){ // within 5 min before to 10 min after
+      addApptToQueue(ev.id,(ev.summary||'').split(/[-–]/)[0].trim(),
+        (ev.summary||'').split(/[-–]/)[1]?.trim()||'Appointment',startDt.getTime());
+    }
+  });
+}
+
+function initCalendar(){
+  fetchCalendar();
+  setInterval(fetchCalendar,5*60*1000);   // refresh every 5 min
+  setInterval(checkAutoAppts,60*1000);     // check auto-add every minute
+  setInterval(renderCalendar,60*1000);     // refresh "NOW" state every minute
+}
 </script>
 </body>
 </html>
