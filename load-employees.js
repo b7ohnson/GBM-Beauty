@@ -5,7 +5,7 @@
 const https = require('https');
 
 function genEmpId() {
-  return 'GMB-' + String(Math.floor(1000 + Math.random() * 9000));
+  return 'GBM-' + String(Math.floor(1000 + Math.random() * 9000));
 }
 
 const employees = {

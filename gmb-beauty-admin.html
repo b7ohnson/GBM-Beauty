@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
-  <title>GMB Beauty – Admin</title>
+  <title>GBM Beauty – Admin</title>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700&family=Lato:wght@300;400;700&display=swap" rel="stylesheet"/>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
@@ -197,7 +197,7 @@
 <!-- PIN -->
 <div id="pin-screen">
   <div class="pin-logo">G</div>
-  <h1>GMB <span>Admin</span></h1>
+  <h1>GBM <span>Admin</span></h1>
   <p>Enter your admin PIN</p>
   <div class="pin-dots" id="pin-dots">
     <div class="pin-dot" id="pd-0"></div><div class="pin-dot" id="pd-1"></div>
@@ -224,7 +224,7 @@
 <div id="main-app">
   <header>
     <div class="hlogo">G</div>
-    <div><div class="hname">GMB <span>Admin</span></div><div class="hsub">Salon Management</div></div>
+    <div><div class="hname">GBM <span>Admin</span></div><div class="hsub">Salon Management</div></div>
     <a href="gmb-beauty-staff.html" class="lock-btn" style="text-decoration:none">← Staff</a>
     <button class="lock-btn" onclick="lockApp()">🔒 Lock</button>
   </header>
@@ -370,7 +370,7 @@
           <label>PIN (4 digits)</label>
           <input class="fi" id="emp-pin" type="password" maxlength="4" pattern="[0-9]{4}" placeholder="Choose a 4-digit PIN"/>
         </div>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:12px">A unique Employee ID (e.g. GMB-4827) is auto-generated and cannot be changed.</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:12px">A unique Employee ID (e.g. GBM-4827) is auto-generated and cannot be changed.</div>
         <button class="btn-primary" onclick="addEmployee()">Add Employee</button>
       </div>
       <div id="employees-list"></div>
@@ -714,7 +714,7 @@ function genQR(){
 
 // ── EMPLOYEES ─────────────────────────────────────────────
 let _employees={},_editingEmpKey=null;
-function genEmpId(){return'GMB-'+String(Math.floor(1000+Math.random()*9000));}
+function genEmpId(){return'GBM-'+String(Math.floor(1000+Math.random()*9000));}
 window._renderEmployees=function(data){
   _employees=data||{};
   const list=document.getElementById('employees-list');

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
-  <title>GMB Beauty – Staff</title>
+  <title>GBM Beauty – Staff</title>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700&family=Lato:wght@300;400;700&display=swap" rel="stylesheet"/>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 
@@ -43,6 +43,10 @@
           if(s.calendarId)  window._calendarId=s.calendarId;
           if(s.calendarKey) window._calendarKey=s.calendarKey;
           if(s.calendarId && s.calendarKey) initCalendar();
+        });
+
+        onValue(ref(db,'config/employees'),snap=>{
+          window._employees=snap.val()||{};
         });
 
         onValue(ref(db,'config/stylists'),snap=>{
@@ -92,9 +96,9 @@
     #pin-screen h1{font-family:'Playfair Display',serif;font-size:24px;margin-bottom:3px}
     #pin-screen h1 span{color:var(--gold)}
     #pin-screen p{font-size:13px;color:var(--muted);margin-bottom:28px}
-    .pin-dots{display:flex;gap:14px;margin-bottom:26px}
-    .pin-dot{width:16px;height:16px;border-radius:50%;border:2px solid var(--border);background:transparent;transition:all .2s}
-    .pin-dot.filled{background:var(--gold);border-color:var(--gold)}
+    .id-display{display:flex;align-items:baseline;gap:3px;background:var(--card);border:1px solid var(--gold);border-radius:14px;padding:14px 26px;margin-bottom:26px}
+    .id-prefix{font-family:'Playfair Display',serif;font-size:28px;font-weight:700;color:var(--muted)}
+    .id-digits{font-family:'Playfair Display',serif;font-size:28px;font-weight:700;color:var(--gold);letter-spacing:8px;min-width:4ch}
     .pin-pad{display:grid;grid-template-columns:repeat(3,72px);gap:12px}
     .pin-key{height:64px;border-radius:16px;background:var(--card);border:1px solid var(--border);color:var(--white);font-size:24px;font-weight:700;cursor:pointer;transition:all .15s;-webkit-tap-highlight-color:transparent;display:flex;align-items:center;justify-content:center}
     .pin-key:active{background:var(--green);border-color:var(--gold);transform:scale(.95)}
@@ -222,14 +226,13 @@
 </head>
 <body>
 
-<!-- PIN -->
+<!-- LOGIN -->
 <div id="pin-screen">
   <div class="pin-logo">G</div>
-  <h1>GMB <span>Staff</span></h1>
-  <p>Enter your PIN to access the dashboard</p>
-  <div class="pin-dots" id="pin-dots">
-    <div class="pin-dot" id="pd-0"></div><div class="pin-dot" id="pd-1"></div>
-    <div class="pin-dot" id="pd-2"></div><div class="pin-dot" id="pd-3"></div>
+  <h1>GBM <span>Staff</span></h1>
+  <p>Enter your 4-digit Employee ID</p>
+  <div class="id-display">
+    <span class="id-prefix">GBM-</span><span class="id-digits" id="id-digits">____</span>
   </div>
   <div class="pin-pad">
     <button class="pin-key" onclick="pinKey('1')">1</button>
@@ -252,7 +255,7 @@
 <div id="main-app">
   <header>
     <div class="hlogo">G</div>
-    <div><div class="hname">GMB <span>Beauty</span></div><div class="hsub">Staff Dashboard</div></div>
+    <div><div class="hname">GBM <span>Beauty</span></div><div class="hsub" id="logged-in-name">Staff Dashboard</div></div>
     <div class="hclock" id="clock">–:– –M</div>
     <a href="gmb-beauty-admin.html" class="lock-btn" style="text-decoration:none">⚙️ Admin</a>
     <button class="lock-btn" onclick="lockApp()">🔒 Lock</button>
@@ -312,34 +315,70 @@
 <div id="toast"></div>
 
 <script>
-const STAFF_PIN='1234'; // ← Change this PIN
 const STYLISTS_DEFAULT=['Stylist 1','Stylist 2','Stylist 3'];
 if(!window._STYLISTS) window._STYLISTS=STYLISTS_DEFAULT;
 if(!window._stylistStatus) window._stylistStatus={};
+if(!window._employees) window._employees={};
 const SVC_DUR={'Wash & Set':60,'Silk Press':90,'Relaxer':120,'Color & Highlights':150,'Deep Condition':45,'Trim & Dusting':30,'Box Braids':240,'Knotless Braids':270,'Senegalese Twists':240,'Cornrows':90,'TWA Shapeup':60,'Loc Retwist':120,'Loc Starter':180,'Not Sure / Other':60};
 
 window._authed=false;
+window._loggedInEmployee=null;
 window._reviewUrl='https://g.page/r/YOUR_GOOGLE_REVIEW_LINK';
 let autoSms=true;
 let totalToday=0;
 let prevFirstKey=null;
 let waitTimes=[];
 
-// ── PIN ────────────────────────────────────────────────────
+// ── EMPLOYEE ID LOGIN ──────────────────────────────────────
 let pinBuf='';
-function pinKey(k){if(pinBuf.length>=4)return;pinBuf+=k;updateDots();if(pinBuf.length===4)setTimeout(checkPin,80);}
-function pinDel(){pinBuf=pinBuf.slice(0,-1);updateDots();document.getElementById('pin-error').textContent='';}
-function updateDots(){for(let i=0;i<4;i++)document.getElementById(`pd-${i}`).classList.toggle('filled',i<pinBuf.length);}
+function pinKey(k){
+  if(pinBuf.length>=4)return;
+  pinBuf+=k;
+  updateDisplay();
+  if(pinBuf.length===4)setTimeout(checkPin,80);
+}
+function pinDel(){
+  pinBuf=pinBuf.slice(0,-1);
+  updateDisplay();
+  document.getElementById('pin-error').textContent='';
+}
+function updateDisplay(){
+  document.getElementById('id-digits').textContent=pinBuf.padEnd(4,'_');
+}
 function checkPin(){
-  if(pinBuf===STAFF_PIN){
+  const empId='GBM-'+pinBuf;
+  const entries=Object.entries(window._employees||{});
+  if(!entries.length){
+    document.getElementById('pin-error').textContent='Loading employee data… try again.';
+    pinBuf='';updateDisplay();
+    setTimeout(()=>document.getElementById('pin-error').textContent='',2500);
+    return;
+  }
+  const match=entries.find(([,e])=>e.employeeId===empId&&e.active!==false);
+  if(match){
+    window._loggedInEmployee={key:match[0],...match[1]};
     window._authed=true;
+    const nameEl=document.getElementById('logged-in-name');
+    if(nameEl)nameEl.textContent=match[1].name+' · '+match[1].role;
     document.getElementById('pin-screen').classList.add('hidden');
     document.getElementById('main-app').classList.add('show');
     if(window._liveQueue)window._renderStaff(window._liveQueue);
     buildStylists();buildReviewQR();
-  }else{document.getElementById('pin-error').textContent='Incorrect PIN.';pinBuf='';updateDots();setTimeout(()=>document.getElementById('pin-error').textContent='',2000);}
+  }else{
+    document.getElementById('pin-error').textContent='ID not found. Check with your manager.';
+    pinBuf='';updateDisplay();
+    setTimeout(()=>document.getElementById('pin-error').textContent='',2500);
+  }
 }
-function lockApp(){window._authed=false;pinBuf='';updateDots();document.getElementById('main-app').classList.remove('show');document.getElementById('pin-screen').classList.remove('hidden');}
+function lockApp(){
+  window._authed=false;
+  window._loggedInEmployee=null;
+  pinBuf='';
+  updateDisplay();
+  document.getElementById('logged-in-name').textContent='Staff Dashboard';
+  document.getElementById('main-app').classList.remove('show');
+  document.getElementById('pin-screen').classList.remove('hidden');
+}
 
 // ── CLOCK ──────────────────────────────────────────────────
 function tick(){const n=new Date(),h=n.getHours(),m=n.getMinutes().toString().padStart(2,'0'),ampm=h>=12?'PM':'AM';document.getElementById('clock').textContent=`${(h%12)||12}:${m} ${ampm}`;}
@@ -386,7 +425,7 @@ async function sendSms(phone,name,msg){
   const digits=String(phone).replace(/\D/g,'');
   const normalized=digits.length===10?'+1'+digits:digits.length===11&&digits[0]==='1'?'+'+digits:digits;
   const key=document.getElementById('sms-key').value.trim()||'textbelt';
-  const message=msg||`Hi ${name.split(' ')[0]}! You're next at GMB Beauty 💅 Please head back in.`;
+  const message=msg||`Hi ${name.split(' ')[0]}! You're next at GBM Beauty 💅 Please head back in.`;
   try{
     // Call Netlify serverless proxy (avoids browser CORS block on textbelt.com)
     const r=await fetch('/.netlify/functions/send-sms',{
