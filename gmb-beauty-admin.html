@@ -42,6 +42,7 @@
           window._renderGallery(config.photos||[]);
           window._loadSettings(config.settings||{});
           window._loadStylists(config.stylists||[]);
+          if(window._renderEmployees)window._renderEmployees(config.employees||{});
         };
 
         window._loadAnalytics=async function(){
@@ -173,6 +174,22 @@
 
     /* DIVIDER */
     .divider{border:none;border-top:1px solid var(--border);margin:18px 0}
+
+    /* EMPLOYEES */
+    .emp-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap}
+    .emp-badge{background:rgba(201,168,76,.15);border:1px solid var(--gold);border-radius:6px;padding:4px 9px;font-size:11px;font-weight:700;color:var(--gold);letter-spacing:.5px;flex-shrink:0;font-family:monospace}
+    .emp-info{flex:1;min-width:0}
+    .emp-name{font-size:14px;font-weight:700}
+    .emp-role{font-size:11px;color:var(--muted);margin-top:2px}
+    .emp-status{font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;letter-spacing:.5px;flex-shrink:0;text-transform:uppercase}
+    .emp-status.active{background:rgba(94,207,138,.15);color:var(--active)}
+    .emp-status.inactive{background:rgba(245,240,232,.07);color:var(--muted)}
+    /* Modal */
+    .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px}
+    .modal-overlay.hidden{display:none}
+    .modal-box{background:#0f1f16;border:1px solid var(--border);border-radius:18px;padding:22px;width:100%;max-width:360px;position:relative}
+    .modal-box h3{font-family:'Playfair Display',serif;font-size:17px;margin-bottom:18px;color:var(--gold-lt)}
+    .modal-close{position:absolute;top:16px;right:16px;background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;line-height:1}
   </style>
 </head>
 <body>
@@ -217,6 +234,7 @@
     <button class="tab-btn" onclick="switchTab('specials')">🏷️ Specials</button>
     <button class="tab-btn" onclick="switchTab('gallery')">🖼️ Gallery</button>
     <button class="tab-btn" onclick="switchTab('analytics')">📊 Analytics</button>
+    <button class="tab-btn" onclick="switchTab('employees')">👥 Employees</button>
     <button class="tab-btn" onclick="switchTab('settings')">⚙️ Settings</button>
   </div>
 
@@ -326,6 +344,38 @@
       </div>
     </div>
 
+    <!-- EMPLOYEES -->
+    <div id="tab-employees" class="tab-panel">
+      <div class="section-head">Employee <span>Management</span></div>
+      <div class="add-form">
+        <h3>➕ Add Employee</h3>
+        <div class="fi-row" style="margin-bottom:10px">
+          <div class="field-group" style="margin:0">
+            <label>Full Name</label>
+            <input class="fi" id="emp-name" type="text" placeholder="e.g. Jasmine Carter"/>
+          </div>
+          <div class="field-group" style="margin:0">
+            <label>Role</label>
+            <select class="fi" id="emp-role-new">
+              <option value="Stylist">Stylist</option>
+              <option value="Braider">Braider</option>
+              <option value="Colorist">Colorist</option>
+              <option value="Lash Tech">Lash Tech</option>
+              <option value="Manager">Manager</option>
+              <option value="Owner">Owner</option>
+            </select>
+          </div>
+        </div>
+        <div class="field-group">
+          <label>PIN (4 digits)</label>
+          <input class="fi" id="emp-pin" type="password" maxlength="4" pattern="[0-9]{4}" placeholder="Choose a 4-digit PIN"/>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:12px">A unique Employee ID (e.g. GMB-4827) is auto-generated and cannot be changed.</div>
+        <button class="btn-primary" onclick="addEmployee()">Add Employee</button>
+      </div>
+      <div id="employees-list"></div>
+    </div>
+
     <!-- SETTINGS -->
     <div id="tab-settings" class="tab-panel">
       <div class="section-head">Salon <span>Settings</span></div>
@@ -341,6 +391,20 @@
           <input class="fi" id="set-instagram" type="text" placeholder="elfsight-app-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"/>
         </div>
         <div class="save-row"><button class="btn-primary" onclick="saveSocialSettings()">Save</button></div>
+      </div>
+
+      <div class="settings-section">
+        <h3>📅 Google Calendar</h3>
+        <div class="field-group">
+          <label>Calendar ID</label>
+          <input class="fi" id="set-cal-id" type="text" placeholder="xxx@group.calendar.google.com"/>
+        </div>
+        <div class="field-group">
+          <label>Google API Key</label>
+          <input class="fi" id="set-cal-key" type="text" placeholder="AIza..."/>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Make your calendar public: Google Calendar → Settings → Share with specific people → Make available to public</div>
+        <div class="save-row"><button class="btn-primary" onclick="saveCalendarSettings()">Save</button></div>
       </div>
 
       <div class="settings-section">
@@ -399,6 +463,48 @@
 
   </div><!-- /content -->
 </div><!-- /main-app -->
+
+<!-- EMPLOYEE EDIT MODAL -->
+<div id="emp-modal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeEmpModal()">✕</button>
+    <h3>Edit Employee</h3>
+    <div class="field-group">
+      <label>Full Name</label>
+      <input class="fi" id="emp-edit-name" type="text" placeholder="Full name"/>
+    </div>
+    <div class="field-group">
+      <label>Role</label>
+      <select class="fi" id="emp-edit-role">
+        <option value="Stylist">Stylist</option>
+        <option value="Braider">Braider</option>
+        <option value="Colorist">Colorist</option>
+        <option value="Lash Tech">Lash Tech</option>
+        <option value="Manager">Manager</option>
+        <option value="Owner">Owner</option>
+      </select>
+    </div>
+    <div class="field-group">
+      <label>Employee ID</label>
+      <input class="fi" id="emp-edit-empid" type="text" readonly style="opacity:.55;cursor:default"/>
+    </div>
+    <div class="field-group">
+      <label>PIN (4 digits)</label>
+      <input class="fi" id="emp-edit-pin" type="password" maxlength="4" pattern="[0-9]{4}" placeholder="4-digit PIN"/>
+    </div>
+    <div class="field-group">
+      <label>Status</label>
+      <select class="fi" id="emp-edit-active">
+        <option value="true">Active</option>
+        <option value="false">Inactive</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:18px">
+      <button class="btn-primary" onclick="saveEmployee()">Save Changes</button>
+      <button class="btn-sm" onclick="closeEmpModal()">Cancel</button>
+    </div>
+  </div>
+</div>
 
 <div id="toast"></div>
 
@@ -547,7 +653,15 @@ window._loadSettings=function(s){
   if(s.city)setVal('set-city',s.city);
   if(s.smsKey)setVal('set-sms',s.smsKey);
   if(s.salonName)setVal('set-salon-name',s.salonName);
+  if(s.calendarId)setVal('set-cal-id',s.calendarId);
+  if(s.calendarKey)setVal('set-cal-key',s.calendarKey);
 };
+function saveCalendarSettings(){
+  const calendarId=v('set-cal-id'),calendarKey=v('set-cal-key');
+  if(!calendarId||!calendarKey){toast('Both Calendar ID and API Key are required');return;}
+  const patch={calendarId,calendarKey};
+  window._fbSet('config/settings',{...((window._cfg&&window._cfg.settings)||{}),...patch}).then(()=>toast('Calendar settings saved ✓'));
+}
 function saveSocialSettings(){
   const patch={reviewUrl:v('set-review')||null,instagramSrc:v('set-instagram')||null};
   window._fbSet('config/settings',{...((window._cfg&&window._cfg.settings)||{}),...patch}).then(()=>toast('Saved ✓'));
@@ -597,6 +711,73 @@ function genQR(){
     }catch(e){out.textContent='URL too long — try a shorter URL';}
   },350);
 }
+
+// ── EMPLOYEES ─────────────────────────────────────────────
+let _employees={},_editingEmpKey=null;
+function genEmpId(){return'GMB-'+String(Math.floor(1000+Math.random()*9000));}
+window._renderEmployees=function(data){
+  _employees=data||{};
+  const list=document.getElementById('employees-list');
+  if(!list)return;
+  list.innerHTML='';
+  const entries=Object.entries(_employees);
+  if(!entries.length){
+    list.innerHTML='<div style="text-align:center;padding:28px;color:var(--muted);border:1px dashed var(--border);border-radius:12px">No employees yet — add the first one above.</div>';
+    return;
+  }
+  entries.forEach(([key,emp])=>{
+    const active=emp.active!==false;
+    const el=document.createElement('div');
+    el.className='emp-card';
+    el.innerHTML=`<div class="emp-badge">${esc(emp.employeeId||'GMB-????')}</div><div class="emp-info"><div class="emp-name">${esc(emp.name)}</div><div class="emp-role">${esc(emp.role||'Stylist')}</div></div><div class="emp-status ${active?'active':'inactive'}">${active?'Active':'Inactive'}</div><button class="btn-sm" onclick="editEmployee('${key}')">Edit</button><button class="item-del" onclick="delEmployee('${key}')">✕</button>`;
+    list.appendChild(el);
+  });
+};
+function addEmployee(){
+  const name=v('emp-name');
+  const role=document.getElementById('emp-role-new')?.value||'Stylist';
+  const pin=v('emp-pin');
+  if(!name){toast('Name required');return;}
+  if(!pin||!/^\d{4}$/.test(pin)){toast('PIN must be exactly 4 digits');return;}
+  const key='emp_'+Date.now();
+  _employees[key]={name,role,employeeId:genEmpId(),pin,active:true};
+  window._fbSet('config/employees',_employees).then(()=>{
+    window._renderEmployees(_employees);
+    clearInputs('emp-name','emp-pin');
+    toast('Employee added ✓');
+  });
+}
+function editEmployee(key){
+  _editingEmpKey=key;
+  const emp=_employees[key];if(!emp)return;
+  document.getElementById('emp-edit-name').value=emp.name||'';
+  document.getElementById('emp-edit-role').value=emp.role||'Stylist';
+  document.getElementById('emp-edit-empid').value=emp.employeeId||'';
+  document.getElementById('emp-edit-pin').value=emp.pin||'';
+  document.getElementById('emp-edit-active').value=emp.active===false?'false':'true';
+  document.getElementById('emp-modal').classList.remove('hidden');
+}
+function saveEmployee(){
+  const key=_editingEmpKey;if(!key||!_employees[key])return;
+  const name=document.getElementById('emp-edit-name').value.trim();
+  const role=document.getElementById('emp-edit-role').value;
+  const pin=document.getElementById('emp-edit-pin').value.trim();
+  const active=document.getElementById('emp-edit-active').value==='true';
+  if(!name){toast('Name required');return;}
+  if(!pin||!/^\d{4}$/.test(pin)){toast('PIN must be exactly 4 digits');return;}
+  _employees[key]={..._employees[key],name,role,pin,active};
+  window._fbSet('config/employees',_employees).then(()=>{
+    window._renderEmployees(_employees);
+    closeEmpModal();
+    toast('Employee updated ✓');
+  });
+}
+function delEmployee(key){
+  if(!confirm('Remove this employee?'))return;
+  delete _employees[key];
+  window._fbSet('config/employees',_employees).then(()=>{window._renderEmployees(_employees);toast('Employee removed');});
+}
+function closeEmpModal(){document.getElementById('emp-modal').classList.add('hidden');_editingEmpKey=null;}
 
 // ── HELPERS ───────────────────────────────────────────────
 function v(id){return(document.getElementById(id)?.value||'').trim();}
