@@ -382,21 +382,21 @@ function closeReviewModal(){document.getElementById('review-modal').classList.re
 // ── SMS ────────────────────────────────────────────────────
 async function sendSms(phone,name,msg){
   if(!phone){toast('No phone on file for '+name);return false;}
-  // Normalize phone — strip everything except digits, ensure 10 digits
+  // Normalize phone — strip non-digits, add +1 if 10-digit US number
   const digits=String(phone).replace(/\D/g,'');
   const normalized=digits.length===10?'+1'+digits:digits.length===11&&digits[0]==='1'?'+'+digits:digits;
   const key=document.getElementById('sms-key').value.trim()||'textbelt';
   const message=msg||`Hi ${name.split(' ')[0]}! You're next at GMB Beauty 💅 Please head back in.`;
   try{
-    // Use form-encoded to avoid CORS preflight issues
-    const r=await fetch('https://textbelt.com/text',{
+    // Call Netlify serverless proxy (avoids browser CORS block on textbelt.com)
+    const r=await fetch('/.netlify/functions/send-sms',{
       method:'POST',
-      headers:{'Content-Type':'application/x-www-form-urlencoded'},
-      body:new URLSearchParams({phone:normalized,message,key})
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({phone:normalized,message,key})
     });
     const d=await r.json();
     if(d.success){toast(`✓ Text sent to ${name}`);return true;}
-    else{toast('SMS failed: '+(d.error||'unknown error — check key & phone'));return false;}
+    else{toast('SMS failed: '+(d.error||'check key & phone format'));return false;}
   }catch(e){
     console.error('SMS error:',e);
     toast('SMS error: '+(e.message||'check connection'));
