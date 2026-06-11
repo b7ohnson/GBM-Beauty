@@ -69,17 +69,18 @@
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     :root{
-      --bg:#0b1a12;--card:#0f2418;--card2:rgba(255,255,255,.04);
-      --border:rgba(201,168,76,.25);--gold:#c9a84c;--gold-lt:#e2c97a;
-      --green:#1e5c38;--green-lt:#2a7a4d;--white:#f5f0e8;--muted:rgba(245,240,232,.5);
+      --bg:#0a0a0a;--card:#141414;--card2:rgba(255,255,255,.04);
+      --border:rgba(210,34,154,.25);--gold:#d4229a;--gold-lt:#e855c0;
+      --green:#1a2f08;--green-lt:#8cc63f;--white:#f5f0e8;--muted:rgba(245,240,232,.5);
       --red:#e05c5c;--blue:#7ab8ff;
     }
     html,body{width:100%;height:100%;background:var(--bg);color:var(--white);font-family:'Lato',sans-serif;overflow:hidden;-webkit-font-smoothing:antialiased}
     body{position:fixed;width:100%}
     #app{height:100vh;display:flex;flex-direction:column}
 
-    header{background:linear-gradient(90deg,#081410,#0f2418,#081410);border-bottom:1px solid var(--border);padding:14px 22px;display:flex;align-items:center;gap:12px;flex-shrink:0}
-    .logo-mark{width:44px;height:44px;background:linear-gradient(135deg,var(--green),var(--green-lt));border:1px solid var(--gold);border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:var(--gold);flex-shrink:0}
+    header{background:linear-gradient(90deg,#080808,#111111,#080808);border-bottom:1px solid var(--border);padding:14px 22px;display:flex;align-items:center;gap:12px;flex-shrink:0}
+    .logo-mark{width:44px;height:44px;background:#000;border:1px solid var(--gold);border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:var(--gold);flex-shrink:0;overflow:hidden}
+    .logo-mark img{width:100%;height:100%;object-fit:contain;padding:3px}
     .brand-name{font-family:'Playfair Display',serif;font-size:20px;font-weight:700;letter-spacing:1px}
     .brand-name span{color:var(--gold)}
     .brand-sub{font-size:11px;font-weight:300;color:var(--muted);margin-top:1px}
@@ -109,7 +110,7 @@
     .field textarea{resize:none;height:72px;font-size:13px}
     .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--gold)}
     .field input::placeholder{color:rgba(245,240,232,.22)}
-    .field select option{background:#0f2418;color:var(--white)}
+    .field select option{background:#111111;color:var(--white)}
 
     /* Birthday row */
     .bday-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -193,14 +194,14 @@
     .pv-wait{font-size:10px;color:var(--gold);white-space:nowrap}
     .pv-empty{text-align:center;font-size:12px;color:var(--muted);padding:12px}
 
-    footer{background:linear-gradient(90deg,#081410,#0f2418,#081410);border-top:1px solid var(--border);padding:8px 22px;text-align:center;font-size:11px;color:var(--muted);flex-shrink:0}
+    footer{background:linear-gradient(90deg,#080808,#111111,#080808);border-top:1px solid var(--border);padding:8px 22px;text-align:center;font-size:11px;color:var(--muted);flex-shrink:0}
     footer span{color:var(--gold)}
   </style>
 </head>
 <body>
 <div id="app">
   <header>
-    <div class="logo-mark">G</div>
+    <div class="logo-mark"><img src="logo.png" alt="GBM" onerror="this.outerHTML='G'"/></div>
     <div><div class="brand-name">GBM <span>Beauty</span></div><div class="brand-sub">Walk-In Check-In</div></div>
     <div class="hclock" id="clock">–:– –M</div>
   </header>

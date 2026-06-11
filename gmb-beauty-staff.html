@@ -86,9 +86,9 @@
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     :root{
-      --bg:#080f0b;--card:#0f2418;--card2:rgba(255,255,255,.04);
-      --border:rgba(201,168,76,.22);--gold:#c9a84c;--gold-lt:#e2c97a;
-      --green:#1e5c38;--green-lt:#2a7a4d;--white:#f5f0e8;--muted:rgba(245,240,232,.5);
+      --bg:#0a0a0a;--card:#141414;--card2:rgba(255,255,255,.04);
+      --border:rgba(210,34,154,.22);--gold:#d4229a;--gold-lt:#e855c0;
+      --green:#1a2f08;--green-lt:#8cc63f;--white:#f5f0e8;--muted:rgba(245,240,232,.5);
       --red:#e05c5c;--active:#5ecf8a;--blue:#7ab8ff;
     }
     html,body{width:100%;min-height:100vh;background:var(--bg);color:var(--white);font-family:'Lato',sans-serif;-webkit-font-smoothing:antialiased}
@@ -96,7 +96,8 @@
     /* PIN */
     #pin-screen{position:fixed;inset:0;z-index:999;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px}
     #pin-screen.hidden{display:none}
-    .pin-logo{width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,var(--green),var(--green-lt));border:2px solid var(--gold);display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-size:28px;font-weight:700;color:var(--gold);margin-bottom:18px}
+    .pin-logo{width:64px;height:64px;border-radius:50%;background:#000;border:2px solid var(--gold);display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-size:28px;font-weight:700;color:var(--gold);margin-bottom:18px;overflow:hidden}
+    .pin-logo img{width:100%;height:100%;object-fit:contain;padding:6px}
     #pin-screen h1{font-family:'Playfair Display',serif;font-size:24px;margin-bottom:3px}
     #pin-screen h1 span{color:var(--gold)}
     #pin-screen p{font-size:13px;color:var(--muted);margin-bottom:28px}
@@ -113,8 +114,9 @@
     #main-app{display:none;min-height:100vh;flex-direction:column}
     #main-app.show{display:flex}
 
-    header{background:linear-gradient(90deg,#040a06,#0f2418,#040a06);border-bottom:1px solid var(--border);padding:12px 18px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:50}
-    .hlogo{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--green),var(--green-lt));border:1px solid var(--gold);display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-size:15px;font-weight:700;color:var(--gold);flex-shrink:0}
+    header{background:linear-gradient(90deg,#040404,#111111,#040404);border-bottom:1px solid var(--border);padding:12px 18px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:50}
+    .hlogo{width:36px;height:36px;border-radius:50%;background:#000;border:1px solid var(--gold);display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-size:15px;font-weight:700;color:var(--gold);flex-shrink:0;overflow:hidden}
+    .hlogo img{width:100%;height:100%;object-fit:contain;padding:3px}
     .hname{font-family:'Playfair Display',serif;font-size:17px;font-weight:700}
     .hname span{color:var(--gold)}
     .hsub{font-size:10px;color:var(--muted)}
@@ -209,7 +211,7 @@
     .sc-assign label{font-size:10px;color:var(--muted);white-space:nowrap}
     .sc-assign select{flex:1;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:7px;padding:6px 9px;color:var(--white);font-size:12px;outline:none;font-family:'Lato',sans-serif;-webkit-appearance:none}
     .sc-assign select:focus{border-color:var(--gold)}
-    .sc-assign select option{background:#0f2418}
+    .sc-assign select option{background:#111111}
 
     .sc-note-area{padding:0 15px 8px}
     .sc-note-input{width:100%;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:7px;padding:7px 9px;color:var(--white);font-size:12px;font-family:'Lato',sans-serif;outline:none;resize:none;height:48px}
@@ -251,7 +253,7 @@
 
 <!-- LOGIN -->
 <div id="pin-screen">
-  <div class="pin-logo">G</div>
+  <div class="pin-logo"><img src="logo.png" alt="GBM" onerror="this.outerHTML='G'"/></div>
   <h1>GBM <span>Staff</span></h1>
   <p>Enter your 4-digit Employee ID</p>
   <div class="id-display">
@@ -277,7 +279,7 @@
 <!-- MAIN -->
 <div id="main-app">
   <header>
-    <div class="hlogo">G</div>
+    <div class="hlogo"><img src="logo.png" alt="GBM" onerror="this.outerHTML='G'"/></div>
     <div><div class="hname">GBM <span>Beauty</span></div><div class="hsub" id="logged-in-name">Staff Dashboard</div></div>
     <div class="hclock" id="clock">–:– –M</div>
     <a href="gmb-beauty-admin.html" class="lock-btn" style="text-decoration:none">⚙️ Admin</a>

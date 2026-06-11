@@ -76,19 +76,20 @@
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     :root{
-      --bg:#0b1a12; --sidebar:#0c1e14; --main:#0f2418; --card:rgba(255,255,255,.04);
-      --border:rgba(201,168,76,.22); --gold:#c9a84c; --gold-lt:#e2c97a;
-      --green:#1e5c38; --green-lt:#2a7a4d; --white:#f5f0e8; --muted:rgba(245,240,232,.5);
-      --active-border:rgba(46,180,100,.5); --active-bg:rgba(46,180,100,.07); --active:#5ecf8a;
+      --bg:#0a0a0a; --sidebar:#0d0d0d; --main:#111111; --card:rgba(255,255,255,.04);
+      --border:rgba(210,34,154,.22); --gold:#d4229a; --gold-lt:#e855c0;
+      --green:#1a2f08; --green-lt:#8cc63f; --white:#f5f0e8; --muted:rgba(245,240,232,.5);
+      --active-border:rgba(140,198,63,.5); --active-bg:rgba(140,198,63,.07); --active:#8cc63f;
       --appt:#7ab8ff; --appt-bg:rgba(122,184,255,.07); --appt-border:rgba(122,184,255,.35);
     }
     html,body{width:100vw;height:100vh;background:var(--bg);color:var(--white);font-family:'Lato',sans-serif;overflow:hidden;-webkit-font-smoothing:antialiased}
     #app{display:grid;grid-template-rows:72px 1fr 52px;grid-template-columns:400px 1fr;grid-template-areas:"topbar topbar""sidebar main""footer footer";height:100vh}
 
     /* TOP BAR */
-    #topbar{grid-area:topbar;background:linear-gradient(90deg,#081410,#0f2418,#081410);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 32px}
+    #topbar{grid-area:topbar;background:linear-gradient(90deg,#080808,#111111,#080808);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 32px}
     .brand-wrap{display:flex;align-items:center;gap:14px}
-    .brand-logo{width:46px;height:46px;background:linear-gradient(135deg,var(--green),var(--green-lt));border:1px solid var(--gold);border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:var(--gold)}
+    .brand-logo{width:46px;height:46px;background:#000;border:1px solid var(--gold);border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:var(--gold);overflow:hidden}
+    .brand-logo img{width:100%;height:100%;object-fit:contain;padding:4px}
     .brand-name{font-family:'Playfair Display',serif;font-size:26px;font-weight:700;letter-spacing:1px}
     .brand-name span{color:var(--gold)}
     .brand-tag{font-size:11px;font-weight:300;color:var(--muted);letter-spacing:1px}
@@ -188,8 +189,8 @@
     .photo-item{aspect-ratio:3/4;border-radius:14px;overflow:hidden;border:1px solid var(--border);position:relative;background:var(--card)}
     .photo-item img{width:100%;height:100%;object-fit:cover;display:block}
     .ph-placeholder{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}
-    .photo-item:nth-child(4n+1) .ph-placeholder{background:linear-gradient(160deg,#0f2418,#1a3a28)}
-    .photo-item:nth-child(4n+2) .ph-placeholder{background:linear-gradient(160deg,#1a2f1a,#0f2418)}
+    .photo-item:nth-child(4n+1) .ph-placeholder{background:linear-gradient(160deg,#111111,#1a3a28)}
+    .photo-item:nth-child(4n+2) .ph-placeholder{background:linear-gradient(160deg,#1a2f1a,#111111)}
     .photo-item:nth-child(4n+3) .ph-placeholder{background:linear-gradient(160deg,#0f1a14,#1e3a20)}
     .photo-item:nth-child(4n+4) .ph-placeholder{background:linear-gradient(160deg,#162a1c,#0b1a12)}
     .ph-icon{font-size:28px;opacity:.35}
@@ -199,7 +200,7 @@
     /* Specials — uniform grid */
     .specials-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
     .spec-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:22px 20px;display:flex;flex-direction:column;position:relative;overflow:hidden}
-    .spec-card.featured{background:linear-gradient(135deg,#0f2418,#1e5c38,#0f2418);border-color:var(--gold)}
+    .spec-card.featured{background:linear-gradient(135deg,#111111,#2a4010,#111111);border-color:var(--gold)}
     .spec-card::before{content:'✦';position:absolute;right:14px;top:6px;font-size:60px;opacity:.04;color:var(--gold)}
     .sc-tag{display:inline-block;background:var(--gold);color:#0b1a12;font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:3px 10px;border-radius:20px;margin-bottom:10px;align-self:flex-start}
     .spec-card h4{font-family:'Playfair Display',serif;font-size:20px;color:var(--white);margin-bottom:6px}
@@ -221,7 +222,7 @@
     #ig-frame{width:100%;height:calc(100% - 100px);border:none;border-radius:14px;overflow:hidden;display:none}
 
     /* FOOTER */
-    #footer{grid-area:footer;background:linear-gradient(90deg,#081410,#0f2418,#081410);border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 32px}
+    #footer{grid-area:footer;background:linear-gradient(90deg,#080808,#111111,#080808);border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 32px}
     .panel-dots{display:flex;gap:8px;align-items:center}
     .dot{width:8px;height:8px;border-radius:50%;background:var(--border);transition:all .4s;cursor:pointer}
     .dot.active{background:var(--gold);width:24px;border-radius:4px}
@@ -234,7 +235,7 @@
 <div id="app">
   <div id="topbar">
     <div class="brand-wrap">
-      <div class="brand-logo">G</div>
+      <div class="brand-logo"><img src="logo.png" alt="GBM" onerror="this.outerHTML='G'"/></div>
       <div><div class="brand-name">GBM <span>Beauty</span></div><div class="brand-tag">Where Every Client Shines</div></div>
     </div>
     <div class="topbar-right">
