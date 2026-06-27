@@ -62,6 +62,13 @@
         window._fbRemove=key=>remove(ref(db,`waitlist/${key}`));
         window._fbShoutout=text=>set(ref(db,'config/shoutout'),{text,ts:Date.now()});
         window._fbClearShoutout=()=>remove(ref(db,'config/shoutout'));
+        window._fbApptUpdate=(key,patch)=>update(ref(db,`appointments/${key}`),patch);
+
+        // Live appointments — pending approvals
+        onValue(ref(db,'appointments'),snap=>{
+          window._pendingAppts=snap.val()||{};
+          if(window._renderPendingAppts) window._renderPendingAppts();
+        });
 
         window._fbAnalytics=async(entry)=>{
           const today=new Date().toISOString().split('T')[0];
@@ -326,6 +333,18 @@
         <div class="section-count" id="cal-count">–</div>
       </div>
       <div id="cal-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px"></div>
+    </div>
+
+    <!-- PENDING APPROVALS PANEL -->
+    <div id="pending-appts-section" style="display:none;margin-bottom:14px">
+      <div class="section-head" style="cursor:pointer" onclick="togglePendingPanel()">
+        <div class="section-title">
+          📋 Booking <span>Requests</span>
+          <span id="pending-appt-badge" style="display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;background:var(--gold);color:#fff;border-radius:50px;font-size:10px;font-weight:700;padding:0 5px;margin-left:6px;vertical-align:middle">0</span>
+        </div>
+        <span id="pending-panel-toggle" style="font-size:12px;color:var(--muted)">▼ Show</span>
+      </div>
+      <div id="pending-appts-list" style="display:none;flex-direction:column;gap:8px;margin-top:10px"></div>
     </div>
 
     <div class="section-head">
@@ -651,6 +670,106 @@ async function clearShoutout(){
   if(window._fbClearShoutout){await window._fbClearShoutout();toast('Shoutout cleared');}
 }
 
+// ── PENDING BOOKING APPROVALS ─────────────────────────────
+let _pendingPanelOpen = false;
+let _staffApproveKey  = null;
+
+function togglePendingPanel(){
+  _pendingPanelOpen = !_pendingPanelOpen;
+  const list   = document.getElementById('pending-appts-list');
+  const toggle = document.getElementById('pending-panel-toggle');
+  if(list)   list.style.display   = _pendingPanelOpen ? 'flex' : 'none';
+  if(toggle) toggle.textContent   = _pendingPanelOpen ? '▲ Hide' : '▼ Show';
+}
+
+window._renderPendingAppts = function(){
+  const all     = window._pendingAppts || {};
+  const pending = Object.entries(all).filter(([,a]) => a.status === 'pending');
+  const section = document.getElementById('pending-appts-section');
+  const badge   = document.getElementById('pending-appt-badge');
+  const list    = document.getElementById('pending-appts-list');
+
+  if (section) section.style.display = pending.length ? 'block' : 'none';
+  if (badge)   badge.textContent = pending.length;
+  if (!list)   return;
+
+  list.innerHTML = '';
+  if (!pending.length) { list.innerHTML = '<div style="color:var(--muted);font-size:12px;text-align:center;padding:12px">No pending requests</div>'; return; }
+
+  pending.sort(([,a],[,b]) => (a.ts||0)-(b.ts||0)).forEach(([key,a]) => {
+    const card = document.createElement('div');
+    card.style.cssText = 'background:var(--card2);border:1px solid var(--border);border-left:3px solid var(--gold);border-radius:10px;padding:12px';
+    card.innerHTML = `
+      <div style="font-size:13px;font-weight:700;color:var(--white);margin-bottom:4px">${esc(a.first_name||'')} ${esc(a.last_name||'')} <span style="font-size:11px;font-weight:400;color:var(--muted)">· ${esc(a.service||'')}</span></div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px">📅 ${esc(a.preferred_date||'—')} at ${esc(a.preferred_time||'—')} &nbsp;·&nbsp; 📞 ${esc(a.phone||'—')}</div>
+      <div style="display:flex;gap:8px">
+        <button onclick="openStaffApproveModal('${key}')" style="flex:1;padding:7px;border-radius:7px;border:1px solid rgba(94,207,138,.4);background:rgba(94,207,138,.1);color:#5ecf8a;font-size:11px;font-weight:700;cursor:pointer">✅ Approve</button>
+        <button onclick="staffDeclineBooking('${key}')" style="flex:1;padding:7px;border-radius:7px;border:1px solid rgba(224,92,92,.3);background:transparent;color:var(--red);font-size:11px;font-weight:700;cursor:pointer">❌ Decline</button>
+      </div>`;
+    list.appendChild(card);
+  });
+};
+
+function openStaffApproveModal(key){
+  _staffApproveKey = key;
+  const a = (window._pendingAppts||{})[key];
+  if (!a) return;
+  // Populate stylist options
+  const sel = document.getElementById('staff-approve-stylist');
+  if (sel) {
+    sel.innerHTML = '<option value="">— Assign Stylist —</option>';
+    const stylists = Array.isArray(window._stylists) ? window._stylists : Object.values(window._stylists||{});
+    stylists.filter(s=>s&&s.name&&s.status!=='offline').forEach(s=>{
+      const opt=document.createElement('option');
+      opt.value=s.name;opt.textContent=s.name;
+      sel.appendChild(opt);
+    });
+  }
+  const summary = document.getElementById('staff-approve-summary');
+  if (summary) summary.textContent = `${a.first_name} ${a.last_name} — ${a.service} — ${a.preferred_date} at ${a.preferred_time}`;
+  const dateEl = document.getElementById('staff-approve-date');
+  if (dateEl && a.preferred_date) dateEl.value = a.preferred_date;
+  const modal = document.getElementById('staff-approve-modal');
+  if (modal) modal.style.display = 'flex';
+}
+function closeStaffApproveModal(){
+  const modal = document.getElementById('staff-approve-modal');
+  if (modal) modal.style.display = 'none';
+  _staffApproveKey = null;
+}
+async function confirmStaffApprove(){
+  if (!_staffApproveKey) return;
+  const stylist = document.getElementById('staff-approve-stylist')?.value;
+  const date    = document.getElementById('staff-approve-date')?.value;
+  const time    = document.getElementById('staff-approve-time')?.value;
+  if (!stylist) { toast('Please pick a stylist'); return; }
+  if (!date)    { toast('Please confirm the date'); return; }
+  const a = (window._pendingAppts||{})[_staffApproveKey];
+  await window._fbApptUpdate(_staffApproveKey, {status:'approved',stylist,confirmedDate:date,confirmedTime:time,approvedAt:Date.now()});
+  // SMS
+  const phone  = (a.phone||'').replace(/\D/g,'');
+  const smsKey = window._smsKey || '';
+  if (phone && smsKey) {
+    const msg = `Hi ${a.first_name||'there'}! 💅 Your ${a.service} at GBM Beauty is CONFIRMED for ${date} at ${time} with ${stylist}. See you then! Questions? Call (614) 806-8210.`;
+    fetch('/.netlify/functions/send-sms',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone,message:msg,key:smsKey})}).catch(()=>{});
+  }
+  closeStaffApproveModal();
+  toast('✅ Approved & client texted!');
+}
+async function staffDeclineBooking(key){
+  if (!confirm('Decline and text the client?')) return;
+  const a = (window._pendingAppts||{})[key];
+  await window._fbApptUpdate(key, {status:'declined',declinedAt:Date.now()});
+  const phone  = (a.phone||'').replace(/\D/g,'');
+  const smsKey = window._smsKey || '';
+  if (phone && smsKey) {
+    const msg = `Hi ${a.first_name||'there'}, we can't accommodate your ${a.service} for ${a.preferred_date}. Please call (614) 806-8210 to reschedule — we'd love to see you! 💅 GBM Beauty`;
+    fetch('/.netlify/functions/send-sms',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone,message:msg,key:smsKey})}).catch(()=>{});
+  }
+  toast('Declined & client notified');
+}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/'/g,'&#39;');}
+
 // ── HELPERS ────────────────────────────────────────────────
 function isBirthdayToday(bd){if(!bd)return false;const t=new Date();const[mo,dy]=bd.split('-').map(Number);return t.getMonth()+1===mo&&t.getDate()===dy;}
 function fmtPhone(p){const d=String(p).replace(/\D/g,'');if(d.length===10)return`(${d.slice(0,3)}) ${d.slice(3,6)}-${d.slice(6)}`;return p;}
@@ -756,5 +875,41 @@ function initCalendar(){
   setInterval(renderCalendar,60*1000);     // refresh "NOW" state every minute
 }
 </script>
+
+<!-- STAFF BOOKING APPROVAL MODAL -->
+<div id="staff-approve-modal" style="display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.8);backdrop-filter:blur(6px);align-items:center;justify-content:center;padding:20px">
+  <div style="background:var(--card);border:1px solid rgba(212,37,154,.35);border-radius:18px;padding:24px;max-width:380px;width:100%">
+    <h3 style="font-family:'Playfair Display',serif;font-size:17px;margin-bottom:5px;color:var(--white)">Approve Booking</h3>
+    <p id="staff-approve-summary" style="font-size:12px;color:var(--muted);margin-bottom:16px"></p>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div>
+        <label style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:4px">Assign Stylist</label>
+        <select id="staff-approve-stylist" style="width:100%;background:#111;border:1px solid var(--border);border-radius:8px;color:var(--white);font-family:'Lato',sans-serif;font-size:13px;padding:10px 12px;outline:none">
+          <option value="">— Assign Stylist —</option>
+        </select>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div>
+          <label style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:4px">Confirmed Date</label>
+          <input id="staff-approve-date" type="date" style="width:100%;background:#111;border:1px solid var(--border);border-radius:8px;color:var(--white);font-family:'Lato',sans-serif;font-size:13px;padding:10px 12px;outline:none"/>
+        </div>
+        <div>
+          <label style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:4px">Confirmed Time</label>
+          <select id="staff-approve-time" style="width:100%;background:#111;border:1px solid var(--border);border-radius:8px;color:var(--white);font-family:'Lato',sans-serif;font-size:13px;padding:10px 12px;outline:none">
+            <option>9:00 AM</option><option>9:30 AM</option><option>10:00 AM</option><option>10:30 AM</option>
+            <option>11:00 AM</option><option>11:30 AM</option><option>12:00 PM</option><option>12:30 PM</option>
+            <option>1:00 PM</option><option>1:30 PM</option><option>2:00 PM</option><option>2:30 PM</option>
+            <option>3:00 PM</option><option>3:30 PM</option><option>4:00 PM</option><option>4:30 PM</option>
+            <option>5:00 PM</option><option>5:30 PM</option><option>6:00 PM</option><option>7:00 PM</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button onclick="confirmStaffApprove()" style="flex:1;padding:11px;border-radius:9px;border:1px solid rgba(94,207,138,.4);background:rgba(94,207,138,.12);color:#5ecf8a;font-size:12px;font-weight:700;cursor:pointer">✅ Confirm & Text Client</button>
+        <button onclick="closeStaffApproveModal()" style="flex:1;padding:11px;border-radius:9px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:12px;font-weight:700;cursor:pointer">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
 </body>
 </html>
