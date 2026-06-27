@@ -276,32 +276,64 @@
 
     <!-- SPECIALS -->
     <div id="tab-specials" class="tab-panel">
-      <div class="section-head">Specials & <span>Promotions</span></div>
+      <div class="section-head">Website <span>Specials Control</span></div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:18px">These specials appear on the public website and the TV display. The ⭐ Featured one shows at the top of the website homepage. Changes go live instantly.</p>
+
+      <!-- Live specials table -->
+      <div style="overflow-x:auto;margin-bottom:28px">
+        <table id="specials-table" style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead>
+            <tr style="border-bottom:1px solid var(--border)">
+              <th style="text-align:left;padding:10px 12px;color:var(--muted);font-weight:600;letter-spacing:.08em;text-transform:uppercase;font-size:11px">Special Name</th>
+              <th style="text-align:left;padding:10px 12px;color:var(--muted);font-weight:600;letter-spacing:.08em;text-transform:uppercase;font-size:11px">Price</th>
+              <th style="text-align:left;padding:10px 12px;color:var(--muted);font-weight:600;letter-spacing:.08em;text-transform:uppercase;font-size:11px">Badge Tag</th>
+              <th style="text-align:left;padding:10px 12px;color:var(--muted);font-weight:600;letter-spacing:.08em;text-transform:uppercase;font-size:11px">Ends</th>
+              <th style="text-align:center;padding:10px 12px;color:var(--muted);font-weight:600;letter-spacing:.08em;text-transform:uppercase;font-size:11px">Featured</th>
+              <th style="text-align:center;padding:10px 12px;color:var(--muted);font-weight:600;letter-spacing:.08em;text-transform:uppercase;font-size:11px">Active</th>
+              <th style="padding:10px 12px"></th>
+            </tr>
+          </thead>
+          <tbody id="specials-tbody">
+            <tr><td colspan="7" style="text-align:center;padding:28px;color:var(--muted)">No specials added yet</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Add form -->
       <div class="add-form">
-        <h3>➕ Add Special / Promotion</h3>
-        <div class="field-group">
-          <label>Title</label>
-          <input class="fi" id="sp-title" placeholder="e.g. Summer Special 🌞" type="text"/>
-        </div>
-        <div class="field-group">
-          <label>Description</label>
-          <input class="fi" id="sp-desc" placeholder="e.g. 20% off Silk Press all July!" type="text"/>
-        </div>
+        <h3>➕ Add New Special</h3>
         <div class="fi-row">
-          <div class="field-group" style="margin:0">
-            <label>Discount / Price</label>
-            <input class="fi" id="sp-price" placeholder="e.g. 20% off or $75" type="text"/>
+          <div class="field-group" style="margin:0;flex:2">
+            <label>Special Name</label>
+            <input class="fi" id="sp-name" placeholder="e.g. Knotless Braids" type="text"/>
           </div>
-          <div class="field-group" style="margin:0">
-            <label>Expires (optional)</label>
-            <input class="fi" id="sp-exp" type="date"/>
+          <div class="field-group" style="margin:0;flex:1">
+            <label>Price / Offer</label>
+            <input class="fi" id="sp-price" placeholder="e.g. $180 or 20% off" type="text"/>
           </div>
         </div>
-        <div style="margin-top:12px">
-          <button class="btn-primary" onclick="addSpecial()">Add Promotion</button>
+        <div class="fi-row" style="margin-top:12px">
+          <div class="field-group" style="margin:0;flex:1">
+            <label>Badge Tag <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+            <input class="fi" id="sp-tag" placeholder="e.g. This Week Only" type="text"/>
+          </div>
+          <div class="field-group" style="margin:0;flex:1">
+            <label>Note / Subtitle <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+            <input class="fi" id="sp-note" placeholder="e.g. Any length · Limited spots" type="text"/>
+          </div>
+          <div class="field-group" style="margin:0;flex:1">
+            <label>End Date <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+            <input class="fi" id="sp-enddate" type="date"/>
+          </div>
+        </div>
+        <div style="margin-top:14px;display:flex;align-items:center;gap:20px;flex-wrap:wrap">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--white)">
+            <input type="checkbox" id="sp-featured" style="width:16px;height:16px;accent-color:var(--gold)"/>
+            ⭐ Set as Featured on Website
+          </label>
+          <button class="btn-primary" onclick="addSpecial()">Add Special</button>
         </div>
       </div>
-      <div class="item-list" id="specials-list"></div>
     </div>
 
     <!-- GALLERY -->
@@ -570,25 +602,89 @@ function delService(key){if(!confirm('Delete this service?'))return;delete _serv
 let _specials={};
 window._renderSpecials=function(data){
   _specials=data||{};
-  const list=document.getElementById('specials-list');
-  list.innerHTML='';
-  Object.entries(_specials).forEach(([key,s])=>{
-    const exp=s.expires?`<span style="color:var(--muted)"> · Expires ${s.expires}</span>`:'';
-    const el=document.createElement('div');
-    el.className='item-card';
-    el.innerHTML=`<div class="item-main"><div class="item-name">${esc(s.title)}</div><div class="item-sub">${esc(s.description||'')}${exp}</div></div><div class="item-price">${esc(s.discount||s.price||'')}</div><button class="item-del" onclick="delSpecial('${key}')">✕</button>`;
-    list.appendChild(el);
+  const tbody=document.getElementById('specials-tbody');
+  if(!tbody)return;
+  const entries=Object.entries(_specials);
+  if(!entries.length){
+    tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:28px;color:var(--muted)">No specials added yet — use the form below to add one.</td></tr>';
+    return;
+  }
+  tbody.innerHTML='';
+  entries.forEach(([key,s])=>{
+    const name    = s.name||s.title||'—';
+    const price   = s.price||s.discount||'—';
+    const tag     = s.tag||'';
+    const endDate = s.endDate||s.expires||'';
+    const isFeat  = !!s.featured;
+    const isActive= s.active!==false;
+    // countdown
+    let endLabel='—';
+    if(endDate){
+      const days=Math.ceil((new Date(endDate)-new Date())/86400000);
+      if(days<0) endLabel=`<span style="color:var(--red)">Expired</span>`;
+      else if(days===0) endLabel=`<span style="color:#E8832A">Today</span>`;
+      else if(days<=3)  endLabel=`<span style="color:#E8832A">${days}d left</span>`;
+      else endLabel=endDate;
+    }
+    const tr=document.createElement('tr');
+    tr.style.cssText='border-bottom:1px solid rgba(255,255,255,.06);transition:background .15s';
+    tr.onmouseenter=()=>tr.style.background='rgba(255,255,255,.03)';
+    tr.onmouseleave=()=>tr.style.background='';
+    tr.innerHTML=`
+      <td style="padding:14px 12px;font-weight:600;color:var(--white)">${esc(name)}</td>
+      <td style="padding:14px 12px;color:var(--gold);font-weight:700">${esc(price)}</td>
+      <td style="padding:14px 12px">
+        ${tag?`<span style="background:rgba(140,198,63,.15);color:#8cc63f;border:1px solid rgba(140,198,63,.3);font-size:11px;font-weight:700;letter-spacing:.08em;padding:3px 10px;border-radius:50px">${esc(tag)}</span>`:'<span style="color:var(--muted)">—</span>'}
+      </td>
+      <td style="padding:14px 12px;font-size:12px">${endLabel}</td>
+      <td style="padding:14px 12px;text-align:center">
+        <button onclick="setFeatured('${key}')" title="Set as featured on website"
+          style="background:none;border:none;cursor:pointer;font-size:20px;opacity:${isFeat?1:.25};transition:opacity .2s"
+          onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity='${isFeat?1:.25}'">⭐</button>
+      </td>
+      <td style="padding:14px 12px;text-align:center">
+        <button onclick="toggleActive('${key}')"
+          style="background:${isActive?'rgba(94,207,138,.15)':'rgba(255,255,255,.07)'};
+                 border:1px solid ${isActive?'rgba(94,207,138,.4)':'rgba(255,255,255,.15)'};
+                 color:${isActive?'#5ecf8a':'var(--muted)'};
+                 font-size:11px;font-weight:700;letter-spacing:.06em;padding:4px 12px;border-radius:50px;cursor:pointer">
+          ${isActive?'LIVE':'OFF'}
+        </button>
+      </td>
+      <td style="padding:14px 12px;text-align:center">
+        <button class="item-del" onclick="delSpecial('${key}')">✕</button>
+      </td>`;
+    tbody.appendChild(tr);
   });
-  if(!Object.keys(_specials).length)list.innerHTML='<div style="text-align:center;padding:24px;color:var(--muted);border:1px dashed var(--border);border-radius:12px">No promotions added yet</div>';
 };
 function addSpecial(){
-  const t=v('sp-title'),desc=v('sp-desc'),p=v('sp-price'),exp=v('sp-exp');
-  if(!t){toast('Title required');return;}
+  const name=v('sp-name'),price=v('sp-price'),tag=v('sp-tag'),note=v('sp-note'),endDate=v('sp-enddate');
+  const featured=document.getElementById('sp-featured')?.checked||false;
+  if(!name){toast('Special name required');return;}
+  // if setting as featured, unmark others
+  if(featured) Object.keys(_specials).forEach(k=>{ _specials[k].featured=false; });
   const key='sp_'+Date.now();
-  _specials[key]={title:t,description:desc,discount:p,expires:exp||null};
-  window._fbSet('config/specials',_specials).then(()=>{window._renderSpecials(_specials);clearInputs('sp-title','sp-desc','sp-price','sp-exp');toast('Promotion saved ✓');});
+  _specials[key]={name,price:price||'',tag:tag||'',note:note||'',endDate:endDate||null,featured,active:true};
+  window._fbSet('config/specials',_specials).then(()=>{
+    window._renderSpecials(_specials);
+    clearInputs('sp-name','sp-price','sp-tag','sp-note','sp-enddate');
+    if(document.getElementById('sp-featured'))document.getElementById('sp-featured').checked=false;
+    toast('Special saved ✓ — live on website now');
+  });
 }
-function delSpecial(key){if(!confirm('Delete this promotion?'))return;delete _specials[key];window._fbSet('config/specials',_specials).then(()=>{window._renderSpecials(_specials);toast('Deleted');});}
+function delSpecial(key){
+  if(!confirm('Delete this special?'))return;
+  delete _specials[key];
+  window._fbSet('config/specials',_specials).then(()=>{window._renderSpecials(_specials);toast('Deleted');});
+}
+function setFeatured(key){
+  Object.keys(_specials).forEach(k=>{ _specials[k].featured=(k===key); });
+  window._fbSet('config/specials',_specials).then(()=>{window._renderSpecials(_specials);toast('⭐ Featured special updated — live on website');});
+}
+function toggleActive(key){
+  _specials[key].active=!(_specials[key].active!==false);
+  window._fbSet('config/specials',_specials).then(()=>{window._renderSpecials(_specials);toast('Special updated');});
+}
 
 // ── GALLERY ───────────────────────────────────────────────
 let _gallery=[];
