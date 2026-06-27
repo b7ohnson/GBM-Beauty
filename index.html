@@ -1119,8 +1119,15 @@
         console.error('Booking error:', err);
         submitBtn.disabled    = false;
         submitBtn.textContent = 'Request Appointment';
-        // Fallback: native form submit to Netlify
-        form.submit();
+        // Show visible error so we can diagnose
+        let errDiv = document.getElementById('form-error-msg');
+        if (!errDiv) {
+          errDiv = document.createElement('div');
+          errDiv.id = 'form-error-msg';
+          errDiv.style.cssText = 'background:rgba(224,92,92,.15);border:1px solid rgba(224,92,92,.4);border-radius:10px;padding:12px 16px;margin-top:12px;color:#e05c5c;font-size:13px;line-height:1.5';
+          form.appendChild(errDiv);
+        }
+        errDiv.innerHTML = `<strong>Booking error:</strong> ${err.message||err}<br><small>Please call us at (614) 806-8210 or try again.</small>`;
       }
     });
   }
