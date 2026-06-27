@@ -10,7 +10,7 @@
   <script type="module">
     try {
       const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
-      const { getDatabase, ref, onValue, update, remove, increment, set } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js");
+      const { getDatabase, ref, onValue, update, remove, increment, set, push } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js");
 
       const firebaseConfig = {
         apiKey:"AIzaSyDujypyhEgmAZalHwe21gwCCPnL7fkOrp4",
@@ -63,6 +63,7 @@
         window._fbShoutout=text=>set(ref(db,'config/shoutout'),{text,ts:Date.now()});
         window._fbClearShoutout=()=>remove(ref(db,'config/shoutout'));
         window._fbApptUpdate=(key,patch)=>update(ref(db,`appointments/${key}`),patch);
+        window._fbPush=(path,data)=>push(ref(db,path),data);
 
         // Live appointments — pending approvals
         onValue(ref(db,'appointments'),snap=>{
@@ -335,16 +336,21 @@
       <div id="cal-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px"></div>
     </div>
 
-    <!-- PENDING APPROVALS PANEL -->
-    <div id="pending-appts-section" style="display:none;margin-bottom:14px">
+    <!-- BOOKING REQUESTS + NEW APPT -->
+    <div style="margin-bottom:14px">
       <div class="section-head" style="cursor:pointer" onclick="togglePendingPanel()">
         <div class="section-title">
           📋 Booking <span>Requests</span>
           <span id="pending-appt-badge" style="display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;background:var(--gold);color:#fff;border-radius:50px;font-size:10px;font-weight:700;padding:0 5px;margin-left:6px;vertical-align:middle">0</span>
         </div>
-        <span id="pending-panel-toggle" style="font-size:12px;color:var(--muted)">▼ Show</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span id="pending-panel-toggle" style="font-size:12px;color:var(--muted)">▼ Show</span>
+          <button onclick="event.stopPropagation();openNewApptModal()" style="background:var(--gold);color:#fff;border:none;border-radius:8px;padding:5px 13px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">+ New Appt</button>
+        </div>
       </div>
-      <div id="pending-appts-list" style="display:none;flex-direction:column;gap:8px;margin-top:10px"></div>
+      <div id="pending-appts-section" style="display:none;margin-bottom:14px">
+        <div id="pending-appts-list" style="display:none;flex-direction:column;gap:8px;margin-top:10px"></div>
+      </div>
     </div>
 
     <div class="section-head">
@@ -676,10 +682,12 @@ let _staffApproveKey  = null;
 
 function togglePendingPanel(){
   _pendingPanelOpen = !_pendingPanelOpen;
-  const list   = document.getElementById('pending-appts-list');
-  const toggle = document.getElementById('pending-panel-toggle');
-  if(list)   list.style.display   = _pendingPanelOpen ? 'flex' : 'none';
-  if(toggle) toggle.textContent   = _pendingPanelOpen ? '▲ Hide' : '▼ Show';
+  const section = document.getElementById('pending-appts-section');
+  const list    = document.getElementById('pending-appts-list');
+  const toggle  = document.getElementById('pending-panel-toggle');
+  if(section) section.style.display = _pendingPanelOpen ? 'block' : 'none';
+  if(list)    list.style.display    = _pendingPanelOpen ? 'flex'  : 'none';
+  if(toggle)  toggle.textContent    = _pendingPanelOpen ? '▲ Hide' : '▼ Show';
 }
 
 window._renderPendingAppts = function(){
@@ -689,8 +697,8 @@ window._renderPendingAppts = function(){
   const badge   = document.getElementById('pending-appt-badge');
   const list    = document.getElementById('pending-appts-list');
 
-  if (section) section.style.display = pending.length ? 'block' : 'none';
   if (badge)   badge.textContent = pending.length;
+  if (badge)   badge.style.display = pending.length ? 'inline-flex' : 'none';
   if (!list)   return;
 
   list.innerHTML = '';
@@ -718,10 +726,9 @@ function openStaffApproveModal(key){
   const sel = document.getElementById('staff-approve-stylist');
   if (sel) {
     sel.innerHTML = '<option value="">— Assign Stylist —</option>';
-    const stylists = Array.isArray(window._stylists) ? window._stylists : Object.values(window._stylists||{});
-    stylists.filter(s=>s&&s.name&&s.status!=='offline').forEach(s=>{
+    (window._STYLISTS||[]).forEach(name=>{
       const opt=document.createElement('option');
-      opt.value=s.name;opt.textContent=s.name;
+      opt.value=name; opt.textContent=name;
       sel.appendChild(opt);
     });
   }
@@ -768,12 +775,80 @@ async function staffDeclineBooking(key){
   }
   toast('Declined & client notified');
 }
+// ── NEW APPOINTMENT (staff-created) ─────────────────────────
+function openNewApptModal(){
+  // Populate stylist dropdown
+  const sel = document.getElementById('na-stylist');
+  if(sel){
+    sel.innerHTML='<option value="">— Assign Stylist —</option>';
+    (window._STYLISTS||[]).forEach(name=>{
+      const o=document.createElement('option');o.value=name;o.textContent=name;sel.appendChild(o);
+    });
+  }
+  // Default date to today
+  const dateEl=document.getElementById('na-date');
+  if(dateEl&&!dateEl.value) dateEl.value=new Date().toISOString().split('T')[0];
+  const modal=document.getElementById('new-appt-modal');
+  if(modal) modal.style.display='flex';
+}
+function closeNewApptModal(){
+  const modal=document.getElementById('new-appt-modal');
+  if(modal) modal.style.display='none';
+  ['na-first','na-last','na-phone','na-notes'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  const svc=document.getElementById('na-service');if(svc)svc.value='';
+}
+async function submitNewAppt(){
+  const first   = document.getElementById('na-first')?.value.trim();
+  const last    = document.getElementById('na-last')?.value.trim();
+  const phone   = document.getElementById('na-phone')?.value.trim();
+  const service = document.getElementById('na-service')?.value;
+  const stylist = document.getElementById('na-stylist')?.value;
+  const date    = document.getElementById('na-date')?.value;
+  const time    = document.getElementById('na-time')?.value;
+  const notes   = document.getElementById('na-notes')?.value.trim();
+
+  if(!first)   { toast('Enter first name'); return; }
+  if(!service) { toast('Select a service'); return; }
+  if(!stylist) { toast('Assign a stylist'); return; }
+  if(!date)    { toast('Pick a date'); return; }
+
+  const appt = {
+    first_name:first, last_name:last||'', phone:phone||'',
+    email:'', service, notes:notes||'',
+    preferred_date:date, preferred_time:time,
+    stylist, confirmedDate:date, confirmedTime:time,
+    status:'approved', source:'staff', ts:Date.now(), approvedAt:Date.now()
+  };
+
+  if(!window._fbApptUpdate){ toast('Firebase not ready'); return; }
+  // Use push via the stored push function or fallback
+  try{
+    if(window._fbPush){
+      await window._fbPush('appointments', appt);
+    } else {
+      // Fallback: generate random key
+      const key = 'staff_'+Date.now();
+      await window._fbApptUpdate(key, appt);
+    }
+  } catch(e){ toast('Error saving: '+e.message); return; }
+
+  // SMS
+  const smsKey = window._smsKey||'';
+  const phoneD = phone.replace(/\D/g,'');
+  if(smsKey && phoneD.length>=10){
+    const msg = `Hi ${first}! 💅 Your ${service} at GBM Beauty is CONFIRMED for ${date} at ${time} with ${stylist}. See you then! — GBM Beauty`;
+    fetch('/.netlify/functions/send-sms',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:phoneD,message:msg,key:smsKey})}).catch(()=>{});
+  }
+
+  closeNewApptModal();
+  toast('✅ Appointment booked' + (smsKey&&phoneD.length>=10?' & client texted':'') + '!');
+}
+
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/'/g,'&#39;');}
 
 // ── HELPERS ────────────────────────────────────────────────
 function isBirthdayToday(bd){if(!bd)return false;const t=new Date();const[mo,dy]=bd.split('-').map(Number);return t.getMonth()+1===mo&&t.getDate()===dy;}
 function fmtPhone(p){const d=String(p).replace(/\D/g,'');if(d.length===10)return`(${d.slice(0,3)}) ${d.slice(3,6)}-${d.slice(6)}`;return p;}
-function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/'/g,'&#39;');}
 let toastT;
 function toast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),3000);}
 
@@ -875,6 +950,71 @@ function initCalendar(){
   setInterval(renderCalendar,60*1000);     // refresh "NOW" state every minute
 }
 </script>
+
+<!-- NEW APPOINTMENT MODAL -->
+<div id="new-appt-modal" style="display:none;position:fixed;inset:0;z-index:310;background:rgba(0,0,0,.85);backdrop-filter:blur(6px);align-items:center;justify-content:center;padding:20px;overflow-y:auto">
+  <div style="background:var(--card);border:1px solid rgba(212,37,154,.4);border-radius:18px;padding:24px;max-width:400px;width:100%;margin:auto">
+    <h3 style="font-family:'Playfair Display',serif;font-size:17px;margin-bottom:4px;color:var(--white)">New Appointment</h3>
+    <p style="font-size:11px;color:var(--muted);margin-bottom:16px">Book a client directly — saves as approved and texts them</p>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div>
+          <label style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:4px">First Name</label>
+          <input id="na-first" type="text" placeholder="Jane" style="width:100%;box-sizing:border-box;background:#111;border:1px solid var(--border);border-radius:8px;color:var(--white);font-family:'Lato',sans-serif;font-size:13px;padding:10px 12px;outline:none"/>
+        </div>
+        <div>
+          <label style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:4px">Last Name</label>
+          <input id="na-last" type="text" placeholder="Smith" style="width:100%;box-sizing:border-box;background:#111;border:1px solid var(--border);border-radius:8px;color:var(--white);font-family:'Lato',sans-serif;font-size:13px;padding:10px 12px;outline:none"/>
+        </div>
+      </div>
+      <div>
+        <label style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:4px">Phone (for SMS confirmation)</label>
+        <input id="na-phone" type="tel" placeholder="555-000-0000" style="width:100%;box-sizing:border-box;background:#111;border:1px solid var(--border);border-radius:8px;color:var(--white);font-family:'Lato',sans-serif;font-size:13px;padding:10px 12px;outline:none"/>
+      </div>
+      <div>
+        <label style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:4px">Service</label>
+        <select id="na-service" style="width:100%;box-sizing:border-box;background:#111;border:1px solid var(--border);border-radius:8px;color:var(--white);font-family:'Lato',sans-serif;font-size:13px;padding:10px 12px;outline:none">
+          <option value="">— Select Service —</option>
+          <option>Wash &amp; Set</option><option>Silk Press</option><option>Relaxer</option>
+          <option>Color &amp; Highlights</option><option>Deep Condition</option><option>Trim &amp; Dusting</option>
+          <option>Box Braids</option><option>Knotless Braids</option><option>Senegalese Twists</option>
+          <option>Cornrows</option><option>TWA Shapeup</option><option>Loc Retwist</option>
+          <option>Loc Starter</option><option>Not Sure / Other</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:4px">Assign Stylist</label>
+        <select id="na-stylist" style="width:100%;box-sizing:border-box;background:#111;border:1px solid var(--border);border-radius:8px;color:var(--white);font-family:'Lato',sans-serif;font-size:13px;padding:10px 12px;outline:none">
+          <option value="">— Assign Stylist —</option>
+        </select>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div>
+          <label style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:4px">Date</label>
+          <input id="na-date" type="date" style="width:100%;box-sizing:border-box;background:#111;border:1px solid var(--border);border-radius:8px;color:var(--white);font-family:'Lato',sans-serif;font-size:13px;padding:10px 12px;outline:none"/>
+        </div>
+        <div>
+          <label style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:4px">Time</label>
+          <select id="na-time" style="width:100%;box-sizing:border-box;background:#111;border:1px solid var(--border);border-radius:8px;color:var(--white);font-family:'Lato',sans-serif;font-size:13px;padding:10px 12px;outline:none">
+            <option>9:00 AM</option><option>9:30 AM</option><option>10:00 AM</option><option>10:30 AM</option>
+            <option>11:00 AM</option><option>11:30 AM</option><option>12:00 PM</option><option>12:30 PM</option>
+            <option>1:00 PM</option><option>1:30 PM</option><option>2:00 PM</option><option>2:30 PM</option>
+            <option>3:00 PM</option><option>3:30 PM</option><option>4:00 PM</option><option>4:30 PM</option>
+            <option>5:00 PM</option><option>5:30 PM</option><option>6:00 PM</option><option>7:00 PM</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:4px">Notes (optional)</label>
+        <textarea id="na-notes" rows="2" placeholder="Any notes..." style="width:100%;box-sizing:border-box;background:#111;border:1px solid var(--border);border-radius:8px;color:var(--white);font-family:'Lato',sans-serif;font-size:13px;padding:10px 12px;outline:none;resize:none"></textarea>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button onclick="submitNewAppt()" style="flex:1;padding:11px;border-radius:9px;border:1px solid rgba(212,37,154,.5);background:rgba(212,37,154,.15);color:var(--gold);font-size:12px;font-weight:700;cursor:pointer">💅 Book &amp; Text Client</button>
+        <button onclick="closeNewApptModal()" style="flex:1;padding:11px;border-radius:9px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:12px;font-weight:700;cursor:pointer">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- STAFF BOOKING APPROVAL MODAL -->
 <div id="staff-approve-modal" style="display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.8);backdrop-filter:blur(6px);align-items:center;justify-content:center;padding:20px">
